@@ -991,7 +991,7 @@ var carousel = (function carouselProductPage(globalVariable) {
 				if((variantImageUrls.length == 0) && addDefaultImagesIfNoVariantImage == true) {
 					hasOnlyDefaultImages = true;
 					// make all images for default available
-					addDefaultImages(defaultImages, variantImageUrls);
+					addDefaultImages(defaultImagesSrc, variantImageUrls);
 					variantIdImagesArray[i][2] = hasOnlyDefaultImages;
 
 				} else {
@@ -999,7 +999,7 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 					// check to see if default should be appended anyway...
 					if(addDefaultImagesToVariants == true) {
-						addDefaultImages(defaultImages, variantImageUrls)
+						addDefaultImages(defaultImagesSrc, variantImageUrls)
 					}
 				}
 
@@ -1014,7 +1014,7 @@ var carousel = (function carouselProductPage(globalVariable) {
 			
 			variantImageUrls = variantIdImagesArray[0][1];
 			hasDefaultImages = true;
-			addDefaultImages(defaultImages, variantImageUrls);
+			addDefaultImages(defaultImagesSrc, variantImageUrls);
 			variantIdImagesArray[0][2] = hasDefaultImages;
 
 			
