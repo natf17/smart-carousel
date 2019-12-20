@@ -27,13 +27,25 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 
 	var currentVariant = null;
+
+	/*
+	 * An array of arrays....
+	 * One array for each variant:
+	 * elem[0] = variantId
+	 * elem[1] = variant image urls for this variant
+	 * elem[2] = false - does this variant only have default images 
+	 * 
+
+	 */
 	var variantIdImagesArray = [];
+
+	// contains all thumbnail divs as provided by the liquid template
 	var allThumbnails;
 
-	// will hold a thumbnailDiv for every variant
+	// will hold a thumbnailDiv for every variant... array: [[variantId, thumbnailDivs], [...,...]]
 	var productAllThumbnailDivs;
 
-	// will hold the default thumbnails
+	// will hold the default thumbnails: array of divs that contain images in the "default" - images not present in any variant
 	var defaultThumbnailDivs;
 
 	// will hold current thumbnailDivs
@@ -873,14 +885,22 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 	}
 
+	/*
+	 * Returns an array of arrays. Each sub array matches a variant. 
+	 * array[0]: variant id
+	 * array[1]: images to show for this variant
+	 * array[2]: whether the images for this variant are only the "default" images for the product
+	 */
 	function getVariantIdsAndImagesFromProduct(addDefaultImagesIfNoVariantImage, addDefaultImagesToVariants) {
 		var product = globalVariable["injectedGlobs"]["product"];
 
 		// get all images for this product
 		// array of strings: img links
-		var allImagesInProduct = [];
+		var allImagesSrcInProduct = [];
+		var defaultImagesSrc = [];
 		for(var i = 0; i < product["images"].length; i++) {
-			allImagesInProduct.push(product["images"][i]);
+			allImagesSrcInProduct.push(product["images"][i]);
+			defaultImagesSrc.push(product["images"][i]);
 		}
 
 
@@ -893,7 +913,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		var variantImageUrls;
 		var variantImageUrl = null;
 		var variantIdImage;
-
 		for(var i = 0; i < product.variants.length; i++) {
 			variantIdImage = [];
 			variantImageUrls = [];
@@ -912,25 +931,26 @@ var carousel = (function carouselProductPage(globalVariable) {
 			// remove variant image from the list of default...
 			// and replace variant image src with corresponding src from products object for consistency
 			var j = 0;
-			var correspondingImg;
 			var imageComparisonResult;
 			if(variantImageUrl) {
-				for (j = 0; j < allImagesInProduct.length; j++) {
-					imageComparisonResult = synchronizeImagePaths(variantImageUrl, allImagesInProduct[j]);
+				for (j = 0; j < allImagesSrcInProduct.length; j++) {
+					imageComparisonResult = synchronizeImagePaths(variantImageUrl, allImagesSrcInProduct[j]);
 					if (imageComparisonResult) {
-						correspondingImg = allImagesInProduct[j];
-						variantImageUrl = correspondingImg;
+						variantImageUrl = allImagesSrcInProduct[j];
 						variantImageUrls.push(variantImageUrl);
 						break;
 					}
 
 				}
 
-				if(j == allImagesInProduct.length) {
+				if(j == allImagesSrcInProduct.length) {
 					// variant image not found!
 					throw new Error("Couldn't find variant image in list of product images: " + variantImageUrl);
 				} else {
-					allImagesInProduct.splice(j,1);
+					// remove from default variant list
+  					defaultImagesSrc.splice(defaultImagesSrc.indexOf(variantImageUrl), 1);
+					console.log("Successfully updated list of default image sources.");
+
 				}
 
 
@@ -948,7 +968,7 @@ var carousel = (function carouselProductPage(globalVariable) {
 			variantIdImagesArray.push(variantIdImage);
 		}
 
-		var defaultImages = allImagesInProduct; // after previous loop, allImagesInProduct doesn't contain variant pics
+		
 
 		// at this point: variantIdImagesArray = [ ["variandId", ["imageSrc"]], [,]]
 
