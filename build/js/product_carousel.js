@@ -8,7 +8,7 @@ var carousel = (function carouselProductPage(globalVariable) {
 		mainImageDivCurrentClass: "current",
 		mainImageDivHiddenClass: "hidden",
 		idOfBackArrow: "backArrow",
-		ifOfForwardArrow:"forwardArrow",
+		idOfForwardArrow:"forwardArrow",
 		mainImageContainerDivClass: "prod-img-showcase", // MUST BE PROVIDED: class of container div that will hold large product image
 		mainImageDivClass: "lm_gall-mainimg",
 		secondsCarousel: 5000,
@@ -1052,24 +1052,24 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 		clearMainImageContainer();
 
-		  // add images in mainImageDivClass
-		  setup(thumbnailDivs);
+		// add images in mainImageDivClass
+		setup(thumbnailDivs);
 
 
 
-		  // populate array of large images
-		  imagesInventory = findMain(imagesInventory);
+		// populate array of large images
+		imagesInventory = findMain(imagesInventory);
 
-		  //locate thumbnails and add listeners to bind thumbnails to large image
-		  locateThumbnails(thumbnailDivs, imagesInventory);
+		//locate thumbnails and add listeners to bind thumbnails to large image
+		locateThumbnails(thumbnailDivs, imagesInventory);
 
-		  //enable arrows
-		  enableArrows(thumbnailDivs, imagesInventory);
+		//enable arrows
+		enableArrows(thumbnailDivs, imagesInventory);
 
 		  
 		    
 
-		  function setup() {
+		function setup() {
 		    // find thumbnails
 		    //var thumbnailDivs = $("." + settings.thumbnailDivContainerClass).find("div." + settings.thumbnailDivClass);
 		    var divsToPushMain = [];
@@ -1130,16 +1130,16 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 
 
-		  }
+		}
 
 
-		  function clearMainImageContainer() {
+		function clearMainImageContainer() {
 		  	$("." + settings.mainImageContainerDivClass).empty();
-		  }
+		}
 
 
-		  //populates arrays of large images
-		  function findMain(largeImagesArray) {
+		//populates arrays of large images
+		function findMain(largeImagesArray) {
 		    var mainImgMap = [];
 
 		    // extract child divs (assume they hold img)
@@ -1174,9 +1174,9 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 		    return mainImgMap;
 
-		  }
+		}
 
-		  function locateThumbnails(thumbnailDivs, imagesInventory) {
+		function locateThumbnails(thumbnailDivs, imagesInventory) {
 		    
 
 		    thumbnailDivs.each(function() {
@@ -1209,17 +1209,17 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 		    });
 
-		  }
+		}
 
-		  // this object represents an image in the lm-gall_mainimg class div
-		  function ImageObject(src, isEnabled, elementRef) {
+		// this object represents an image in the lm-gall_mainimg class div
+		function ImageObject(src, isEnabled, elementRef) {
 		    this.src = src;
 		    this.isEnabled = isEnabled;
 		    this.elementRef = elementRef;
-		  }
+		}
 
 		  
-		  function enableArrows(thumbnailDivs, imagesInventory) {
+		function enableArrows(thumbnailDivs, imagesInventory) {
 		    var shouldEnableArrows = false;
 		    var forwardArrow;
 		    var backwardArrow;
@@ -1235,7 +1235,7 @@ var carousel = (function carouselProductPage(globalVariable) {
 		    }
 
 		    // enable arrows...
-		    forwardArrow = $("#" + settings.ifOfForwardArrow);
+		    forwardArrow = $("#" + settings.idOfForwardArrow);
 		    forwardArrow.css("display", "block");
 
 		    backwardArrow = $("#" + settings.idOfBackArrow);
@@ -1253,17 +1253,17 @@ var carousel = (function carouselProductPage(globalVariable) {
 		    backwardArrow.on("click", {orderedThumbnails: thumbnailDivs, inventory: imagesInventory, isForwardOrBack: "BACK"}, arrowBehavior);
 
 
-		  }
+		}
 
 
-		  function arrowBehavior(event) {
+		function arrowBehavior(event) {
 		    // stop autoplay
 		    pauseCarousel();
 
 		    //clearInterval(nextOrPrevious);
 		    nextOrPrevious(event.data.orderedThumbnails, event.data.inventory, event.data.isForwardOrBack);
 		    
-		  }
+		}
 
 		  
 	}
