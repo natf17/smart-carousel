@@ -1,43 +1,38 @@
 # Testing
 
-The following scenarios must be tested:
-1. Multiple variants, some have pictures
-2. Multiple variants, none have pictures
-3. 1 variant - has picture
-4. 1 variant - has no picture
+The tests were done with "mode1" = true. Check out the html pages for a live test:
 
+- CarouselTest_1.html: With 1 variant, no featured image, product has multiple images
+- CarouselTest_2.html: With 1 variant, has featured image, product has multiple images
+Expected: With one variant, the carousel always runs, and doesn't select the variant's featured image.
 
+- CarouselTest_3.html: With multiple variants, none have featured image, product has multiple
+- CarouselTest_4.html: With multiple variants, some have featured image, product has multiple
 
-Setup
-1. Save all thumbnails provided via liquid in "allThumbnails"
+Open each page, then change "mode1" to false and "mode2" to true and repeat.
 
-2. With every variant id, we want a list of the corresponding image urls and whether the image urls contain a variant image, or if they're default. This is saved as an array in "variantIdImagesArray" (see getVariantIdsAndImagesFromProduct())
+Sample urls to test the synchronizePaths() function:
 
-3. *MODE2*  Obtain all the thumbnails that correspond to unassigned (default) images and save them in "defaultThumbnailDivs" (see getDefaultThumbnailDivs)
+Strings in the product's "images" array:
 
-4. *MODE2*  For every variant id, use the image srcs to pick out the corresponding thumbnail divs, and save this in an array in "productAllThumbnailDivs" (see getProductAllThumbNailDivs())
+0: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP.jpg?v=1576817622"
+1: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI.jpg?v=1576817622"
+2: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI_ANGLE.jpg?v=1576817622"
+3: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743_GRW_-E-RI_FLAT_UP.jpg?v=1576817622"
+4: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRY-E-RI_FLATUP.jpg?v=1576817622"
+5: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRY-E-RI_ANGLE.jpg?v=1576817622"
+6: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRY-E-RI.jpg?v=1576817622"
+7: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRR-E-RI_FLATUP.jpg?v=1576817622"
+8: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRR-E-RI_ANGLE.jpg?v=1576817622"
+9: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRR-E-RI.jpg?v=1576817622"
+10: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743_GRR_-E-RI_FLAT_UP.jpg?v=1576817622"
+11: "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743_GRY_-E-RI_FLAT_U
 
-5. Obtain the current thumbnail divs that correspond to the current variant id and save them in "thumbnailDivs" (see getCurrentThumbnailDivs())
+A sample variant image source:
+//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP_1000x1000.progressive.jpg?v=1576817622
 
-6. *MODE2* Determine if the current variant selected only contains default images, and save this in "showingDefaultImagesOnly" (see willBeShowingDefaultImagesOnly())
+In the Image_Checker_Test.html console, you can do:
 
-7. *MODE1* Determine if any of the variants have images, and save this in "showingDefaultImagesOnly" (see doVariantsHaveImages())
-
-8. *MODE2* Hide all the thumbnails that don't correspond to currently selected variannt (see hideOtherThumbnails())
-
-9. *MODE2* Make sure all the thumbnails corresponding to current variant are displayed, and either select the variant image or the first thumbnail that appears (see showCurrentThumbnails())
-
-The selectedVariantImage holds a boolean - whether the current variant selected's thumbnail was found and selected, or if it defaulted to selecting the first image
-
-Initialize - init()
-1. Make sure the main image container is empty (see clearMainImageContainer())
-2. Again make sure one thumbnail is selected, and all the thumbnails in "thumbnailDivs" (current variant thumbnails) to the main image container (see setup()).
-3. Populate an array of ImageObject, where each correspodns to an image in the large. The array is saved in the variable "imagesInventory" (see findMain())
-4. To each thumbail div, add a listener so that when it's clicked, the carousel stops, and the main image is refreshed
-5. Add arrow functionality (see enableArrows())
-
-
-
-
-
-problems/inefficiennces... we keep calling synchronizepaths() - see selectCurrentVariant...
+```
+imageChecker.areEqual("//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP.jpg?v=1576817622", "//cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP_1000x1000.progressive.jpg?v=1576817622");
+```

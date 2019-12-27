@@ -1,0 +1,97 @@
+
+<html>
+  <head>
+    <title>My Now Amazing Webpage</title>
+    <meta charset="utf-8">
+
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js" type="text/javascript" defer="defer"></script>
+
+    <script type="text/javascript" src="js/injected_globs_2.js" defer="defer"></script>
+
+    <script type="text/javascript" src="js/product_carousel.js" defer="defer"></script>
+
+
+
+
+  <style>
+  .current {
+  	z-index: 2;
+  }
+  .hidden {
+    z-index: 1;
+  }
+  .prod-img-showcase > div {
+    position:absolute;
+  }
+  .lm_gall-mainimg img {
+    height:500px;
+    width:500px;
+  }
+
+  .lm_gall-thumb img {
+    height:200px;
+    width:200px;
+  }
+
+  #forwardArrow {
+    display:hidden;
+  }
+
+
+  #backArrow {
+    display:hidden;
+  }
+
+  .prod-img-showcase {
+    height:500px;
+    width:500px;
+  }
+
+
+  </style>
+   </head>
+  <body>
+  <div class="leftArrow">
+  <img id="backArrow" src="backarrow.jpg">
+</div>
+
+<div class="prod-img-showcase">
+</div>
+<div class="rightArrow">
+  <img id="forwardArrow" src="rightarrow.jpg">
+</div>
+
+
+
+<div style="height:200px">
+
+  <div class="product-img-nav">
+    <div class="lm_gall-thumb"><img src="watch_2/w1.jpg"></div>
+    <div class="lm_gall-thumb"><img src="watch_2/w2.jpg"></div>
+
+  </div>
+</div>
+
+<button onclick="carousel.pause()">Pause Carousel</button>
+<button onclick="carousel.continue()">Continue Carousel</button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

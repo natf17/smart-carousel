@@ -18,543 +18,537 @@ var carousel = (function carouselProductPage(globalVariable) {
 		mode2: false, // only show pictures for variant
 		mode3: false, // show all pictures, with variants disabled permanently, will be fall back
 		mode2_selectCurrentVariantThumbnail: true,
-		mode2_showDefaultImagesIncludedInVariant: true,
-		mode1_mode2_pauseCarouselIfVariantImage: false,
-		mode1_mode2_pauseCarouselIfVariantChosen: true,
-
-
+		mode2_showDefaultImagesIncludedInVariant: true, // but if variant has no image, it will ALWAYS default to the default images, or to all if there are on "default"
+		mode1_mode2_pauseCarouselIfVariantImage: true,
+		//mode1_mode2_tryToShowDefaultIfNoVariantImage: true, // false: if a variant has no image, show all
 	};
 
 
-	var currentVariant = null;
 
-	/*
-	 * An array of arrays....
-	 * One array for each variant:
-	 * elem[0] = variantId
-	 * elem[1] = variant image urls for this variant
-	 * elem[2] = false - does this variant only have default images 
-	 * 
+	function Variant_Mode1() {
+		this.variantId = null;
+		this.defaultThumbnailDiv = null; // represents the thumbnail to select if this variant is selected
+		this.initializedWithVariantThumbnail = false; // is the defaultThumbnailDiv the featured image for the variant?
+	}
 
-	 */
-	var variantIdImagesArray = [];
+	function Variant_Mode2() {
+		this.variantId = null;
+		this.defaultThumbnailDiv = null;
+		this.initializedWithVariantThumbnail = false; // is the defaultThumbnailDiv the featured image for the variant?
 
-	// contains all thumbnail divs as provided by the liquid template
-	var allThumbnails;
+		this.thumbnaildivs = []; // all the thumbnails assigned to this variant, might be 1 or default + 1 
+	}
 
-	// will hold a thumbnailDiv for every variant... array: [[variantId, thumbnailDivs], [...,...]]
-	var productAllThumbnailDivs;
+	function ImageSrcEntry(variantId, productVariantSrc, productImageSrc) {
+		this.variantId = variantId;
+		this.productVariantSrc = productVariantSrc; // nullable if the variant had no featured image
+		this.productImageSrc = productImageSrc; // nullable if the variant had no featured image
+	}
 
-	// will hold the default thumbnails: array of divs that contain images in the "default" - images not present in any variant
-	var defaultThumbnailDivs;
+	function ThumbnailContainer_Mode1() {
+		this.currentVariantId = null;
+		this.allVariants = []; // Variant_Mode1
+		this.allThumbnails = null;
+		this.currentVariantObject = null;
+		this.currentThumbnailSelected = null;
+		this.currentThumbnailList = []; // same as all thumbnails
+	}
 
-	// will hold current thumbnailDivs
-	var thumbnailDivs;
+	function ThumbnailContainer_Mode2() {
+		this.currentVariantId = null; //
+		this.allVariants = []; // Variant_Mode2
+		this.allThumbnails = null;
+		this.currentVariantObject = null;
+		this.currentThumbnailSelected = null;
+		this.currentThumbnailList = [];
+	}
 
-	// will hold large images
-	var imagesInventory = [];
+	function ThumbnailContainer_Mode3() {
+		this.allThumbnails = null;
+		this.currentThumbnailSelected = null;
+		this.currentThumbnailList = null;
+	}
 
-	var showingDefaultImagesOnly = true;
-	var selectedVariantImage = false;
+	// contains information about the product and the thumbnail configuration. Aggregates all the information needed to populate the
+	// Product objects 
+	function ProductInfo() {
+		this.allThumbnailDivs = null; // the thumbnail divs as provided by the Liquid template
+		this.mode; // "mode1", "mode2", or "mode3"?
+		this.defaultImagesSrc = []; // all the img src strings from the global variable that aren't assigned to a variant
+		this.imageSrcMappings = []; // a list of ImageSrcEntry
+		this.doesAVariantHaveFeaturedImage = false; // if there's at least one variant with an image
+		this.currentVariantId = null; // can be null... mode 3
+	}
 
-	// what mode is enabled?
-	var mode1Enabled = false;
-	var mode2Enabled = false;
-	var mode3Enabled = false;
+	function LargeImageObject(src, elementRef) {
+	    this.src = src;
+		this.elementRef = elementRef;
+	}
 
-	var mode;
+	function LargeImageContainer() {
+		this.largeImages = []; // LargeImageObject
+		this.selectedDiv = null;
+	}
+
+	var THUMBNAIL_CONTAINER;
+	var LARGE_IMAGE_CONTAINER;
 
 	// will hold interval of autoplay
 	var autoplayVar;
 
-				$(document).ready(function(){
+	$(document).ready(function(){
 
-
-	if(!globalVariable) {
-		throw new Error("globalVariable argument is required");
-	}
-
-	if(globalVariable["injectedGlobs"]["insideProduct"] != true) {
-		
-		return;
-	}
-
-	
-
-	//start: get ALL THUMBNAILS!
-	allThumbnails = getAllThumbnails();
-
-	// determine what mode we will be on!
-	if(settings.mode1 == true || settings.mode2 == true) {
-		currentVariant = findCurrentVariant();
-
-		if(currentVariant) {
-			if(settings.mode1 == true) {
-				mode1Enabled = true;
-				mode = "mode1";
-			} else if(settings.mode2 == true) {
-				mode2Enabled = true;
-				mode = "mode2";
-			}
-		} else {
-			// no variant found... fall back to mode 3
-			mode3Enabled = true;
-			mode = "mode3";
-		}
-	} else {
-		mode3Enabled = true;
-		mode = "mode3";
-	}
-
-
-	/* if we want variant functionality...
-	** populate currentVariant with the one that will be shown
-	** populate variantIdImagesArray
-	*/
-
-	if(mode1Enabled == true || mode2Enabled == true) {
-
-
-
-
-		if(mode2Enabled == true) {
-		
-			// array: [["variantId", ["img1", "img2", ...], hasOnlyDefault], [...,[...,...],...], ...]
-			variantIdImagesArray = getVariantIdsAndImagesFromProduct(true, settings.mode2_showDefaultImagesIncludedInVariant);
-
-
-
-
-
-			// get an array of divs that contain images in the "default" - images not present in any variant
-			defaultThumbnailDivs = getDefaultThumbnailDivs(allThumbnails, variantIdImagesArray);
-
-			// populate productAllThumbnailDivs
-			// array: [[variantId, thumbnailDivs], [...,...]]
-			productAllThumbnailDivs = getProductAllThumbNailDivs(defaultThumbnailDivs, allThumbnails, variantIdImagesArray);
-
-			thumbnailDivs = getCurrentThumbnailDivs(currentVariant, productAllThumbnailDivs);
-			showingDefaultImagesOnly = willBeShowingDefaultImagesOnly(currentVariant, variantIdImagesArray);
-
-			// hide all other thumbnails
-
-			hideOtherThumbnails(thumbnailDivs, allThumbnails);
-
-			// make sure current thumbnails are visible
-			// also sets selectedVariantImage variable
-			showCurrentThumbnails(thumbnailDivs, settings.mode2_selectCurrentVariantThumbnail);
-		} else if(mode1Enabled == true) {
-			// show all the pictures and select the current variant
-			thumbnailDivs = allThumbnails;
-
-			// array: [["variantId", ["img1", "img2", ...], hasOnlyDefault], [...,[...,...],...], ...]
-			variantIdImagesArray = getVariantIdsAndImagesFromProduct(false, false);
-
-
-			// in mode1: showingDefaultImagesOnly means no variants have any image
-			// in mode1: this variabble will not change
-			showingDefaultImagesOnly = !doVariantsHaveImages();
-
-
-			// select currentVariant
-
-			selectedVariantImage = (selectCurrentVariant(currentVariant, variantIdImagesArray, thumbnailDivs))[0];
+		if(!globalVariable) {
+			throw new Error("globalVariable argument is required");
 		}
 
-	} 
-
-	// no currentVariant -> no variant functionality
-	else if (mode3Enabled){
-		currentVariant = null; 
-		thumbnailDivs = allThumbnails;
-		showingDefaultImagesOnly = true;
-
-	} else {
-		throw new Error("No MODE selected"); // should never happen
-	}
-
-
-	
-	// we are ready to initialize
-	init();
-
-
-	decideIfEnableCarousel(null, autoplay.var, settings.mode1_mode2_pauseCarouselIfVariantImage, showingDefaultImagesOnly, selectedVariantImage, mode);
-
-
-
-
-}); // end document ready
-
-	function doVariantsHaveImages() {
-		// used exclusively in mode1
-		var product = globalVariable["injectedGlobs"]["product"];
-
-		for(var i = 0; i < product.variants.length; i++) {
-			if(product.variants[i]["featured_image"]) {
-				return true;
-			}
+		if(globalVariable["injectedGlobs"]["insideProduct"] != true) {
+			return;
 		}
 
-		return false;
-
-	}
-
-
-
-	function willBeShowingDefaultImagesOnly(currentVariant, variantIdImagesArray) {
-		var iteratedVariant;
-		var i;
-		for(i = 0; i < variantIdImagesArray.length; i++) {
-			iteratedVariant = variantIdImagesArray[i];
-			if(iteratedVariant[0] == currentVariant) {
-				// third element has a true or false - whether it is default...
-
-				return iteratedVariant[2];
-			}
-		}
-
-
-		throw new Error("Current variant NOT FOUND while determining if we are showing default images");
-	}
-
-
-
-
-	function showCurrentThumbnails(thumbnailDivs, doSelectCurrentVariant) {
-		thumbnailDivs.each(function() {
-			$(this).css("display", ""); // empty string removes the display property
-		});
-
-		// select current variant...
-		if(doSelectCurrentVariant) {
-			selectedVariantImage = (selectCurrentVariant(currentVariant, variantIdImagesArray, thumbnailDivs))[0];
-		} else {
-			selectFirstImage(thumbnailDivs);
-
-			selectedVariantImage = false;
-		}
-	}
-
-	function selectCurrentVariant(currentVariant, variantIdImagesArray, thumbnailDivs) {
 		/*
-		*	FUNCTIONALITY:
-		** 
-		** 1. Find element in variantIdImagesArray that matches this variant --- [variant, ["src1", "src2", ...]]
-		** 2. Starting with the first imgSrc for this variant do the following:
-		** 3. Find corresponding thumbnailDiv in thumbnailDivs by checking thumbnail's src
-		** 4. If found, select it
-		** 5. If none found, repeat 2-4 for every imgSrc for this variant
-		** 6. If none are found - select first image
-		*
-		*  If currentVariant not found - throw an exception
-		*
-		** return: [boolean,thumbnail] 
-		**         0 - if variant image selected
-		**.        1 - thumbnail selected
-		*/
+		 *
+		 * CREATE ALL NECESSARY MAPPINGS, AND OBJECTS: THUMBNAIL_CONTAINER
+		 *
+		 *
+		 */
+		// begin extracting information to create the objects we'll use for the carousel
+		var PRODUCT_INFO = new ProductInfo();
 
-		var chosenThumbnail = null;
-		var variantFound = false;
-		var currentVariantImageSrc = null;
-		var imageSourceInter = null;
-		var currentVariantImageSrc = null;
-		var returnValue = [];
+		// get all thumbnail divs
+		PRODUCT_INFO.allThumbnailDivs = getAllThumbnails();
 
-		// 1.
-		for(var i = 0; i < variantIdImagesArray.length; i++) {
-			if(variantIdImagesArray[i][0] == currentVariant) {
-				// we found the variant
-				currentVariantImageSrc = variantIdImagesArray[i][1];
-				break;
-			}
+
+		// create the image src mappings: defaultImagesSrc and imageSrcMappings properties 
+		processImages(PRODUCT_INFO, globalVariable);
+
+		// determine current mode: "mode1", or "mode2" or "mode3"
+		populateModeAndCurrentVariantId(PRODUCT_INFO, settings, globalVariable);
+
+
+		// a fully populated VariantContainer_Mode{}
+		THUMBNAIL_CONTAINER = createParentObject(settings, globalVariable, PRODUCT_INFO);
+
+		LARGE_IMAGE_CONTAINER = new LargeImageContainer();
+
+		init(THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, settings);
+
+		if(shouldEnableCarousel(settings.autoplay, settings.mode1_mode2_pauseCarouselIfVariantImage, THUMBNAIL_CONTAINER)) {
+			autoplayVar = enable(THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, settings);
 		}
 
-		// if not found, return null
-		if(currentVariantImageSrc == null) {
-			throw "Current variant not in variantIdImagesArray";
+	}); // end document ready
+
+
+
+
+
+	/*
+	 * Create a fully populated ThumbnailContainer_Mode{x}. This function decides which thumbnail div is the default one for each variant.
+	 *
+	 * Requires the following productInfo properties:
+	 *	- allThumbnailDivs
+	 *	- currentVariantId
+	 *	- imageSrcMappings
+	 *	- defaultImagesSrc
+	 */
+	function createParentObject(settings, globVar, productInfo) {
+		var allProductThumbnails = productInfo.allThumbnailDivs;
+		var currentVariantId = productInfo.currentVariantId; // will be null for mode 3
+		
+		var variantContainer = null;
+		console.log(productInfo);
+
+		// mode3: select the first image
+		if(productInfo.mode == "mode3") {
+			variantContainer = new ThumbnailContainer_Mode3();
+			variantContainer.allThumbnails = allProductThumbnails;
+			variantContainer.currentThumbnailList = allProductThumbnails;
+			variantContainer.currentThumbnailSelected = allProductThumbnails[0];
+			return variantContainer;
 		}
 
+		var variantObjects = [];
+		var variantObject = null;
+		var imageSrcEntry = null;
+		for(var i = 0; i < productInfo.imageSrcMappings.length; i++) {
+			imageSrcEntry = productInfo.imageSrcMappings[i];
+					console.log("d " + productInfo.mode);
 
-		// 2 - 5.
-		for(var i = 0; i < currentVariantImageSrc.length; i++) {
-			currentVariantImageSrc = currentVariantImageSrc[i];
-
-			thumbnailDivs.each(function() {
-				imageSourceInter = $(this).children("img").attr("src");
-
-
-				// if we have already found the variant, unselect this one
-				if(variantFound == true) {
-					$(this).removeClass(settings.thumbnailDivSelectedClass + " " + settings.thumbnailDivUnselectedClass).addClass(settings.thumbnailDivUnselectedClass);
-					
-
-				}
-
-				// if variant not found yet, search
-
-				if(synchronizeImagePaths(currentVariantImageSrc,imageSourceInter)) {
-					// there's a match
-					variantFound = true;
-					chosenThumbnail = $(this);
-					// select
-					$(this).removeClass(settings.thumbnailDivSelectedClass + " " + settings.thumbnailDivUnselectedClass).addClass(settings.thumbnailDivSelectedClass);
-
+			if(productInfo.mode == "mode1") {
+				variantObject = new Variant_Mode1();
+				variantObject.variantId = imageSrcEntry.variantId;
+				// this variant has no featured image so select the first available image
+				if(imageSrcEntry.productVariantSrc == null || imageSrcEntry.productImageSrc == null) {
+					variantObject.defaultThumbnailDiv = allProductThumbnails[0];
+					console.log(variantObject.variantId);
+					variantObject.initializedWithVariantThumbnail = false;
 				} else {
-					// no match - unselect
-					$(this).removeClass(settings.thumbnailDivSelectedClass + " " + settings.thumbnailDivUnselectedClass).addClass(settings.thumbnailDivUnselectedClass)
+					variantObject.initializedWithVariantThumbnail = true;
 				}
-			});
 
-			// if we have already found the variant, break
-			if(variantFound == true) {
-				// we have already gone through all the thumbnails to either select or unselect
-				break;
+			} else if(productInfo.mode == "mode2") {
+				variantObject = new Variant_Mode2();
+				variantObject.variantId = imageSrcEntry.variantId;
 
-			}
-		}
+				variantObject.thumbnaildivs = getThumbnailDivListForVariantImgSrc(imageSrcEntry.productVariantSrc, productInfo, settings.mode2_showDefaultImagesIncludedInVariant);
+				// this variant has no featured image so select the first available image from its list of thumbnails
+				if(imageSrcEntry.productVariantSrc == null || imageSrcEntry.productImageSrc == null) {
+					variantObject.defaultThumbnailDiv = variantObject.thumbnaildivs[0];
+					variantObject.initializedWithVariantThumbnail = false;
+				} else {
+					variantObject.initializedWithVariantThumbnail = true;
+				}
 
-
-
-		// 6.
-		if(variantFound == false) {
-			chosenThumbnail = selectFirstImage(thumbnailDivs);
-
-		}
-
-		returnValue[0] = variantFound;
-		returnValue[1] = chosenThumbnail;
-
-		return returnValue;
-
-		
-		
-	}
-
-
-	function selectFirstImage(thumbnailDivs) {
-		// select first thumbnail that is in thumbnailDivs
-
-		var counter = 0;
-		selectedThumbnail = null;
-
-		thumbnailDivs.each(function() {
-
-			if(counter == 0) {
-				// select the first...
-				$(this).removeClass(settings.thumbnailDivSelectedClass + " " + settings.thumbnailDivUnselectedClass).addClass(settings.thumbnailDivSelectedClass);
-				selectedThumbnail = $(this);
 			} else {
-				$(this).removeClass(settings.thumbnailDivSelectedClass + " " + settings.thumbnailDivUnselectedClass).addClass(settings.thumbnailDivUnselectedClass);
+				throw new Error("Unrecognized mode: " + productInfo.mode);
 			}
 
-			counter++;
+
+			// if the default thumbnail div hasn't been set, it's because the variant has a featured image
+			if(!variantObject.defaultThumbnailDiv) {
+				variantObject.defaultThumbnailDiv = getThumbnailDivForVariantImgSrc(imageSrcEntry.productImageSrc, allProductThumbnails);
+
+			}
+
+			// try again			
+			if(!variantObject.defaultThumbnailDiv) {
+				variantObject.defaultThumbnailDiv = getThumbnailDivForVariantImgSrc(imageSrcEntry.productVariantSrc, allProductThumbnails);
+
+			}
+
+			if(!variantObject.defaultThumbnailDiv) {
+				// we couldn't find it...?
+				throw new Error("No thumbnail found that matches the image src: " + imageSrcEntry.productImageSrc + "for variant id " + variantObject.variantId);
+			}
+			variantObjects.push(variantObject);
 			
-		});
+		}
 
-		return selectedThumbnail;
+		if(productInfo.mode == "mode1") {
+			variantContainer = new ThumbnailContainer_Mode1();
+		} else if(productInfo.mode == "mode2") {
+			variantContainer = new ThumbnailContainer_Mode2();
+		} else {
+			throw new Error("Unrecognized mode: " + productInfo.mode);
+		}
 
-				
-	}
+		variantContainer.allThumbnails = allProductThumbnails;
+		variantContainer.currentVariantId = currentVariantId;
+		variantContainer.allVariants = variantObjects;
 
-	function hideOtherThumbnails(thumbnailDivs, allThumbnails) {
-		var thumbnailIntermittentSrc;
-		var thumbnailIntermittent;
-		var thumbnailDivSrc;
 
-		// for every thumbnail in allThumbnails, if it's not thumbnailDivs, make sure it is hidden
-		var counter;
-		var thumbnailDivSize = thumbnailDivs.length;
+		var currentVariantObject = null;
+		for(var i = 0; i < variantObjects.length; i++) {
+			console.log("comparing " + variantObjects[i]["variantId"] + " with " + currentVariantId);
+			if(variantObjects[i]["variantId"] == currentVariantId) {
+				currentVariantObject = variantObjects[i];
+				variantContainer.currentVariantObject = currentVariantObject;
+				variantContainer.currentThumbnailSelected = currentVariantObject.defaultThumbnailDiv;
+				if(variantContainer instanceof ThumbnailContainer_Mode1) {
+					variantContainer.currentThumbnailList = variantContainer.allThumbnails;
+				} else {
+					variantContainer.currentThumbnailList = currentVariantObject.thumbnaildivs;
 
-		var imageComparisonResult;
-		allThumbnails.each(function() {
-			counter = 0;
-			thumbnailIntermittentSrc = $(this).children("img").attr("src");
-			thumbnailIntermittent = this;
-			thumbnailDivs.each(function() {
-				thumbnailDivSrc = $(this).children("img").attr("src");
-				imageComparisonResult = synchronizeImagePaths(thumbnailIntermittentSrc, thumbnailDivSrc);
-				if(imageComparisonResult) {
-					return false;
 				}
-				counter++;
-			});
-
-			// we went through all thumbnailDivs, and it wasn't there!
-			if(counter == thumbnailDivSize) {
-				$(thumbnailIntermittent).css("display", "none");
-			}
-			
-		});
-	}
-
-	// initialize current thumbnailDivs
-
-	function getCurrentThumbnailDivs(currentVariant, productAllThumbnailDivs) {
-		// find thumbnaildivs for currentVariant
-
-		for(var i = 0; i < productAllThumbnailDivs.length; i++) {
-			if(productAllThumbnailDivs[i][0] == currentVariant) {
-				return $(productAllThumbnailDivs[i][1]);
-			}
-		}
-
-		// every existing variant is in productAllThumbnailDivs
-		throw new Error("Error: variant not found");
-
-
-	}
-
-	function getAllThumbnails() {
-		var allThumbnails;
-
-		allThumbnails = $("." + settings.thumbnailDivContainerClass).find("div." + settings.thumbnailDivClass);
-
-
-
-		return allThumbnails;
-	}
-
-
-
-	function getDefaultThumbnailDivs(allThumbnails, variantIdImagesArray) {
-		var defaultThumbnailDivs = [];
-		var defaultThumbnailUrls = [];
-
-		// variantIdImagesArray: [["variantId", ["img1", "img2", ...], hasDefaultImages], [...,[...,...],...], ...]
-
-		// find first variant with defaultThumbnails
-		var i;
-		for(i = 0; i < variantIdImagesArray.length; i++) {
-			if(variantIdImagesArray[i][2] == true) {
-				// this has the default...
-				// so set the default image urls
-				defaultThumbnailUrls = variantIdImagesArray[i][1];
 				break;
+
 			}
 		}
 
-		// if there is no defaultThumbnailUrls, return empty array.
-		if(i == defaultThumbnailUrls.length) {
-			return [];
+		if(currentVariantObject == null) {
+			throw new Error("No variant object found for " + currentVariantId);
 		}
 
-		// if there are defaultThumbnailUrls...
-		// get corresponding divs
+		return variantContainer;
 
-		var thumbnailImageSrc;
-		allThumbnails.each(function() {
+
+
+	}
+
+	/*
+	 * Search the thumbnailDivs array for the thumbnail whose image element's src attribute "matches" variantImgSrc.
+	 * Uses synchronizeImagePaths().
+	 */
+	function getThumbnailDivForVariantImgSrc(variantImgSrc, thumbnailDivs) {
+		var matchingThumbnail = null;
+
+		var thumbnailImageSrc = null;
+		thumbnailDivs.each(function() {
 			// get image element
 		    thumbnailImageSrc = $(this).children("img").attr("src");
+		    console.log("src: " + thumbnailImageSrc);
+		    if(synchronizeImagePaths(variantImgSrc, thumbnailImageSrc)) {
+				matchingThumbnail = $(this);
+				return false;
 
-		    // if image's src is in the array of default image srcs...
-		    var imageComparisonResult;
-		    for(var i = 0; i < defaultThumbnailUrls.length; i++) {
-		    	imageComparisonResult = synchronizeImagePaths(defaultThumbnailUrls[i], thumbnailImageSrc);
-		    	if(imageComparisonResult) {
-		    		// match
-		    		defaultThumbnailDivs.push($(this));
-		    	}
 		    }
 
 		});
 
-
-		return $(defaultThumbnailDivs);
-
+		return matchingThumbnail;
 
 	}
 
+	/*
+	 * Use productInfo to obtain all the thumbnails and defaultThumbnails. Depending on shouldAddDefaultImagesToVariantFeaturedImage,
+	 * either the default thumbnails as well as the variant thumbnail, or just the variant thumbnail will be returned. However, if  
+	 * variantImgSrc is null (the variant has no featured image), the default thumbnails will be returned. If there are no default
+	 * thumbnails (all are assigned to variants), then all the thumbnails are returned.
+	 * 
+	 */
+	function getThumbnailDivListForVariantImgSrc(variantImgSrc, productInfo, shouldAddDefaultImagesToVariantFeaturedImage) {
+		var thumbnailDivList = [];
+		var allThumbnails = productInfo.allThumbnailDivs;
 
-	function findCurrentVariant() {
-		var currentVariant;
+		// if shouldAddDefaultImagesToVariantFeaturedImage is false and if the variant has a featured image
+		// then only find the variant image thumbnail, and we're done.
+		if(variantImgSrc && shouldAddDefaultImagesToVariantFeaturedImage == false) {
+			thumbnailDivList.push(getThumbnailDivForVariantImgSrc(variantImgSrc, allThumbnails));
+			return thumbnailDivList;
+		}
+
+		// at this point, we want to include the default images
+
+		// if there are no default images, just send back all the thumbnails
+		if(productInfo.defaultImagesSrc.length < 1) {
+			for(var i = 0; i < allThumbnails.length; i++) {
+				thumbnailDivList.push(allThumbnails[i]);
+			}
+			return thumbnailDivList;
+		}
+		
+		// there are definitely default images, although there might be no variant image
+		var alreadyAddedVariant = false;
+		if(!variantImgSrc) {
+			alreadyAddedVariant = true; // we don't need to look for the variant image 
+		}
+
+		var thumbnailImageSrc = null;
+		var alreadyAddedVariant = false;
+		allThumbnails.each(function() {
+			// get image element
+		    thumbnailImageSrc = $(this).children("img").attr("src");
+		    
+		    // if this is the variant featured image thumbnail, add it
+		    if(alreadyAddedVariant == false) {
+		    	if(synchronizeImagePaths(variantImgSrc, thumbnailImageSrc)) {
+		    		thumbnailDivList.push($(this));
+		    		alreadyAddedVariant = true;
+					return true;
+
+		   		 }
+		    } 
+
+		    // if this is a default image, add it
+		    for(var i = 0; i < productInfo.defaultImagesSrc.length; i++) {
+				if(synchronizeImagePaths(productInfo.defaultImagesSrc[i], thumbnailImageSrc)) {
+		    		thumbnailDivList.push($(this));
+					return true;
+
+		   		 }
+
+		    }
+		    // neither a default thumbnail, nor the variant featured image
+
+		});
+
+		if(thumbnailDivList.length < 1) {
+			throw new Error("No matching thumbnails for this variant " + variantObject.variantId);
+		}
+
+		return $(thumbnailDivList);
+
+	}
+
+	/*
+	 * Set the defaultImagesSrc and imageSrcMappings properties of productInfo by generating ImageSrcEntry objects for 
+	 * variant image src to product image source mappings and adding the default image src strings. If a variant doesn't have
+	 * a featured image, a ImageSrcEntry will still be created.
+	 * 
+	 * Populates the following productInfo fields:
+	 *	- defaultImagesSrc
+	 *	- imageSrcMappings
+	 * 	- doesAVariantHaveFeaturedImage
+	 */
+	function processImages(productInfo, globVar) {
+		var product = globVar["injectedGlobs"]["product"];
+
+		// get all images for this product
+		// array of strings: img links
+		var allImagesSrcInProduct = product["images"];
+		var defaultImagesSrc = [];
+
+		for(var i = 0; i < allImagesSrcInProduct.length; i++) {
+			defaultImagesSrc.push(allImagesSrcInProduct[i]);
+		}
+
+		// populate imageSrcMappings property of productInfo
+		var prodVariant = null;
+		var variantImageUrl = null;
+		var variantImageUrlInProduct = null;
+		var imageSrcEntry = null;
+		for(var i = 0; i < product.variants.length; i++) {
+			variantImageUrl = null;
+			prodVariant = product.variants[i];
+			if(prodVariant["featured_image"]) {
+				variantImageUrl = prodVariant["featured_image"];
+				if(variantImageUrl) {
+					variantImageUrl = variantImageUrl["src"];
+				}
+				console.log(variantImageUrl);
+			}
+
+			if(!variantImageUrl) {
+				console.log("none for " + prodVariant["id"]);
+				imageSrcEntry = new ImageSrcEntry(prodVariant["id"], null, null);
+				productInfo.imageSrcMappings.push(imageSrcEntry);
+				continue;
+			}
+
+			productInfo.doesAVariantHaveFeaturedImage = true;
+
+			// remove variant image from the list of default...
+			// and create variant image src to product image src entry mapping
+			var j = 0;
+			for (j = 0; j < allImagesSrcInProduct.length; j++) {
+				variantImageUrlInProduct = allImagesSrcInProduct[j];
+				if (synchronizeImagePaths(variantImageUrl, variantImageUrlInProduct)) {
+					imageSrcEntry = new ImageSrcEntry(prodVariant["id"], variantImageUrl, variantImageUrlInProduct);
+					console.log(prodVariant["id"]);
+					productInfo.imageSrcMappings.push(imageSrcEntry);
+					
+					break;
+				}
+			}
+
+			// variant image not found!
+			if(j == allImagesSrcInProduct.length) {
+				throw new Error("Couldn't find variant image " + variantImageUrl + " in list of product images.");
+			} else {
+				// remove from default variant list
+  				defaultImagesSrc.splice(defaultImagesSrc.indexOf(variantImageUrl), 1);
+
+			}
+
+		}
+
+		// populate defaultImagesSrc property of productInfo
+		for(var i = 0; i < defaultImagesSrc.length; i++) {
+			productInfo.defaultImagesSrc.push(defaultImagesSrc[i]);
+		}
+
+		return productInfo;
+
+	}
+
+	/*
+	 * What mode is enabled? What mode will be used?
+	 *
+	 * Populates the following productInfo properties:
+	 * 	- currentVariantId
+	 *	- mode
+	 * 
+	 * Requires the following productInfo properties:
+	 *	- doesAVariantHaveFeaturedImage
+	 *	- imageSrcMappings
+	 */
+	function populateModeAndCurrentVariantId(productInfo, settings, globVar) {
+		var currentMode = null;
+		var currentVariantId = null;
+		console.log("POPUATIG MODE");
+		var defaultMode1 = false;
+		if(settings.mode1 == false && settings.mode2 == false && settings.mode3 == false) {
+			defaultMode1 = true;
+		} 
+
+		if(settings.mode1 == true || settings.mode2 == true || defaultMode1 == true) {
+			currentVariantId = findCurrentVariantId(settings, globVar);
+			console.log(currentVariantId);
+			if(currentVariantId) {
+				currentMode = (settings.mode1 == true || defaultMode1 == true)? "mode1" : "mode2";
+			} else {
+				// no variant found... fall back to mode 3
+						console.log("no variant found");
+				currentMode = "mode3";
+			}
+		} else if(settings.mode3Enabled == true){
+			currentMode = "mode3";
+		} else {
+			// should never happen
+			currentMode = "mode3";
+		}
+
+		/*
+		 * Use mode 3 if...
+		 *	- there's only one variant (it must be the default)
+		 *	- there are no default variant images
+		 */
+
+		if(productInfo.imageSrcMappings.length < 2) {
+					console.log("less than 2 images");
+
+		 	currentMode = "mode3";
+		}
+
+		if(productInfo.doesAVariantHaveFeaturedImage == false) {
+					console.log("no featured image");
+
+		 	currentMode = "mode3";
+		}
+
+		if(settings.mode3Enabled == true) {
+			currentMode = "mode3";
+		}
+
+		productInfo.mode = currentMode;
+		productInfo.currentVariantId = currentVariantId;
+		console.log(currentMode);
+		console.log(productInfo.mode);
+		return productInfo;
+
+	}
+
+	/*
+	 * Will return either the initial variant id specified in the settings object, or the one specified in the 
+	 * "selected_or_first_available_variant" property of the "injectedGlobs" object in the globalVariable.
+	 *
+	 */
+	function findCurrentVariantId(settings, globVar) {
+		var currentVariantId;
 		// if one has been provided... use that one
 		if(settings.initialVariant) {
-			currentVariant = settings.initialVariant;
+			currentVariantId = settings.initialVariant;
 		}
 
 		// else - return the selected_or_first_available_variant from global obj
-		else if(globalVariable["injectedGlobs"]["selected_or_first_available_variant"]) {
-			currentVariant = globalVariable["injectedGlobs"]["selected_or_first_available_variant"]["id"];
+		else if(globVar["injectedGlobs"]["selected_or_first_available_variant"]) {
+			currentVariantId = globVar["injectedGlobs"]["selected_or_first_available_variant"]["id"];
 		}
 
 		// else - fall back to disabling variant functionality
 		else {
-			currentVariant = null;
+			currentVariantId = null;
 		}
 		
 
-		return currentVariant;
+		return currentVariantId;
 	}
 
-	function getProductAllThumbNailDivs(defaultThumbnailDivs, allThumbnails, variantIdImagesArray) {
-		// populate productAllThumbnailDivs
-		// array: [[variantId, thumbnailDivs], [...,...]]
+	/*
+	 * Returns all the thumbnails in the DOM.
+	 *
+	 */
+	function getAllThumbnails() {
+		var allThumbnails = $("." + settings.thumbnailDivContainerClass).find("div." + settings.thumbnailDivClass);
 
-		var productAllThumbNailDivs = [];
-		var variantArrayWithIdandThumbnails = [];
-
-
-		/* for each variant
-		** -does it have the default images?
-		** - if it doesn't then:
-		*** for each image: find corresponding thumbnail div
-		*/
-		var variantId;
-		var variantImageUrls; // to compare with thumbnailImageSrc
-		var variantHasDefault;
-		var thumbnailImageSrc; // will hold src of thumbnail div in current iteration to compare
-		var variantThumbnailDivs; // will hold divs for this variant - either default or its own
-		var imageComparisonResult;
-		for (var i = 0; i < variantIdImagesArray.length; i++) {
-			variantArrayWithIdandThumbnails = [];
-
-			variantId = variantIdImagesArray[i][0];
-			variantHasDefault = variantIdImagesArray[i][2];
-
-			variantArrayWithIdandThumbnails[0] = variantId;
-
-			if(variantHasDefault == true) {
-				variantThumbnailDivs = defaultThumbnailDivs;
-
-			} 
-
-			// variant does not have default pictures... find variant pictures
-			else {
-				variantThumbnailDivs = [];
-
-				// find corresponding divs
-				variantImageUrls = variantIdImagesArray[i][1]
-
-				allThumbnails.each(function() {
-					// get image element
-		    		thumbnailImageSrc = $(this).children("img").attr("src");
-
-
-					for(var j = 0; j < variantImageUrls.length; j++) {
-		    			imageComparisonResult = synchronizeImagePaths(variantImageUrls[j], thumbnailImageSrc);
-		    			
-		    			if(imageComparisonResult) {
-		    				// match
-		    				variantThumbnailDivs.push($(this));
-		    			}
-		    		}
-
-				});
-			}
-			variantArrayWithIdandThumbnails[1] = $(variantThumbnailDivs);
-
-
-			productAllThumbNailDivs.push(variantArrayWithIdandThumbnails);
-		
-
-		}
-
-		return productAllThumbNailDivs;
-
-
+		return allThumbnails;
 	}
 
+	/*
+	 * Are the two src strings equivalent? If they aren't, null is returned.
+	 *
+	 */
 	function synchronizeImagePaths(thumbnailImgSrc, objectImgSrc) {
 
 		//cdn.shopify.com/s/files/1/2464/4489/products/DSC_0003_-_front_7e841e23-870e-47f4-9b16-9e010810e8fa.jpg?v=1523393803
@@ -569,11 +563,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		** returns: if match -> longest url
 		**          else     -> null
 		*/
-
-		
-
-
-	
 
 
 		/* Pre-Strategy: http: || https: prefix and startsWith...
@@ -602,16 +591,9 @@ var carousel = (function carouselProductPage(globalVariable) {
 		}
 
 
-
-
-
-
 		/* STRATEGY 1: url size
 		** if strings are the same size, they must be exactly the same -> return true
 		*/
-
-
-
 		if(thumbnailImgSrc.length == objectImgSrc.length) {
 			if(stringSameLengthComparator(thumbnailImgSrc, objectImgSrc)) {
 				// same size
@@ -634,9 +616,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		}
 
 
-
-
-
 		/*
 		** STRATEGY 2: .jpg
 		** if one of the images contains ".jpg", proceed:
@@ -646,13 +625,9 @@ var carousel = (function carouselProductPage(globalVariable) {
 			4. else, if same size, must be equal
 			5. else continue
 		*/
-
 		var urlNoJpgArray;
 		var urlNoJpgLong = null;
 		var urlNoJpgShort = null;
-
-
-
 
 
 		if(urlShort.includes(".jpg") || urlLong.includes(".jpg")) {
@@ -683,10 +658,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		}
 
 
-
-
-
-
 		/*
 		** STRATEGY 3: 1000x1000
 		** Last strategy:find string that has dimensions (e.g. 100x100)
@@ -695,14 +666,61 @@ var carousel = (function carouselProductPage(globalVariable) {
 				- if either contains the other, return the one with dimensions
 				- else return false
 		*/
+		var newUrlShort = extractSrcDimensionsComparator(urlShort);
+		var newUrlLong = extractSrcDimensionsComparator(urlLong);
 
+		console.log(newUrlShort);
+		console.log(newUrlLong);
 
-		var urlToBeReturned = extractSrcDimensionsComparator(urlShort, urlLong);
-
-
-		if(urlToBeReturned) {
-			return urlToBeReturned;
+		if(newUrlShort == newUrlLong) {
+			return newUrlLong;
 		}
+
+
+
+
+		/*
+		 * STRATEGY 4: "."
+		 * Our last strategy will fall back on breaking up the strings by "."
+		 * Only one of the string pieces will have "/", and this is the one we're interested in.
+		 *
+		 * Ex:
+		 * //cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP_1000x1000.progressive.jpg?v=1576817622
+		 * We want to extract "com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP_1000x1000" for comparison.
+		 *
+		 */
+		 var urlShortDotPieces = newUrlShort.split(".");
+		 var urlLongDotPieces = newUrlLong.split(".");
+
+		 var fragmentShortToComp = null;
+		 var fragmentLongToComp = null;
+
+		 for(var i = 0; i < urlShortDotPieces.length; i++) {
+		 	if(urlShortDotPieces[i].indexOf("/") > -1) {
+		 		fragmentShortToComp = urlShortDotPieces[i];
+		 		break;
+		 	}
+		}
+
+		if(!fragmentShortToComp) {
+		 	return null;
+		}
+
+		for(var i = 0; i < urlLongDotPieces.length; i++) {
+		 	if(urlLongDotPieces[i].indexOf("/") > -1) {
+		 		fragmentLongToComp = urlLongDotPieces[i];
+		 		break;
+		 	}
+		}
+
+		if(!fragmentLongToComp) {
+		 	return null;
+		}
+
+		if(fragmentShortToComp == fragmentLongToComp) {
+			return newUrlLong;
+		}
+
 
 		// no match found!!
 		return null;
@@ -733,15 +751,12 @@ var carousel = (function carouselProductPage(globalVariable) {
 				finalString = url;
 			}
 			
-
 			return finalString;
-
-
 
 		}
 
 
-		function extractSrcDimensionsComparator(firstUrl, secondUrl) {
+		function extractSrcDimensionsComparator(firstUrl) {
 			/*
 			** determine if what is after the last undercore of firstUrl is image dimensions
 			** make sure they are of different sizes... the firstUrl will be the longer one
@@ -760,35 +775,24 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 			*/
 
-			// equally sized strings cannot contain dimensions and be equal
-			if(firstUrl.length == secondUrl.length) {
-				return null;
-			}
-
-			var tempUrl;
-			if(secondUrl.length > firstUrl.length) {
-				tempUrl = firstUrl;
-				firstUrl = secondUrl;
-				secondUrl = tempUrl;
-
-
-			}
-
-
 			var splitAt_Array = firstUrl.split("_");
 
 			if(splitAt_Array.length < 2) {
 				// no "_" found!
-				return null;
+				return firstUrl;
 			}
-
-
 
 			var lastMatchWithUnderscore = splitAt_Array[splitAt_Array.length - 1];
 			var splitAtXArray = lastMatchWithUnderscore.split("x");
 			if(splitAtXArray.length < 2) {
 				// no "x" found!
-				return null;
+				// try uppercase
+				splitAtXArray = lastMatchWithUnderscore.split("X");
+				if(splitAtXArray.length < 2) {
+					// no "X" found
+					return firstUrl;
+				}
+
 			}
 
 			// look at the last 'x'
@@ -802,7 +806,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 			var fg_to_array = fg.split("");
 			var sg_to_array = sg.split("");
-
 
 
 			if($.isNumeric(lastChar_fg) && $.isNumeric(firstChar_sg)) {
@@ -831,9 +834,8 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 			} else {
 				// no dimension found at end..
-				return null;
+				return firstUrl;
 			}
-
 
 			// add elements from first
 			var finalUrl = [];
@@ -849,7 +851,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 				finalUrl.push(splitAt_Array[i]);
 			}
 
-
 			// add pieces that were split by 'x', excluding the last group (which includes the dimensions)
 			for(var i = 0; i < splitAtXArray.length - 2; i++) {
 				if(i != 0) {
@@ -864,381 +865,198 @@ var carousel = (function carouselProductPage(globalVariable) {
 			finalUrl.push(fg_noDimensions);
 			finalUrl.push(sg_noDimensions);
 
-
-
 			finalUrl = finalUrl.join('');
 
-			
 			// STEP 10
+			return finalUrl;
 
-
-			if(secondUrl == finalUrl) {
-				// return url with size
-				return firstUrl; 
-
-			} else {
-				return null;
-			}
 
 		}
 
-
 	}
-
 	/*
-	 * Returns an array of arrays. Each sub array matches a variant. 
-	 * array[0]: variant id
-	 * array[1]: images to show for this variant
-	 * array[2]: whether the images for this variant are only the "default" images for the product
+	 * CALLED WHEN WE ARE READY FOR INITIALIZATION OF THUMBNAILS AND MAIN IMAGE.
+	 *
+	 * Accepts a ThumbnailContainer_Mode{X}, LargeImageContainer, and settings objects
+	 *
 	 */
-	function getVariantIdsAndImagesFromProduct(addDefaultImagesIfNoVariantImage, addDefaultImagesToVariants) {
-		var product = globalVariable["injectedGlobs"]["product"];
+	function init(thumbnailContainer, largeImageContainer, settings) {
 
-		// get all images for this product
-		// array of strings: img links
-		var allImagesSrcInProduct = [];
-		var defaultImagesSrc = [];
-		for(var i = 0; i < product["images"].length; i++) {
-			allImagesSrcInProduct.push(product["images"][i]);
-			defaultImagesSrc.push(product["images"][i]);
-		}
+		// make sure current variant's thumbnail images are visible, and others are hidden
+		refreshVisibleThumbnails(thumbnailContainer);
 
+		// select the appropriate thumbnail
+		refreshSelectedThumbnail(thumbnailContainer, settings);
 
-		// get all variants and their corresponding image
-		var variantIdImagesArray = [];
+		// add large images to the DOM and populate largeImageContainer
+		constructLargeImageContainer(largeImageContainer, thumbnailContainer, settings);
 
+		// locate thumbnails and add listeners to bind thumbnails to large images
+		bindClickListenersToThumbnails(thumbnailContainer, largeImageContainer, settings);
 
-		var prodVariant = null;
-		var variantId = null;
-		var variantImageUrls;
-		var variantImageUrl = null;
-		var variantIdImage;
-		for(var i = 0; i < product.variants.length; i++) {
-			variantIdImage = [];
-			variantImageUrls = [];
-			variantImageUrl = null;
-
-			prodVariant = product.variants[i];
-			variantId = prodVariant["id"];
-
-			if(prodVariant["featured_image"]) {
-				variantImageUrl = prodVariant["featured_image"]["src"];
-
-			}
-
-
-
-			// remove variant image from the list of default...
-			// and replace variant image src with corresponding src from products object for consistency
-			var j = 0;
-			var imageComparisonResult;
-			if(variantImageUrl) {
-				for (j = 0; j < allImagesSrcInProduct.length; j++) {
-					imageComparisonResult = synchronizeImagePaths(variantImageUrl, allImagesSrcInProduct[j]);
-					if (imageComparisonResult) {
-						variantImageUrl = allImagesSrcInProduct[j];
-						variantImageUrls.push(variantImageUrl);
-						break;
-					}
-
-				}
-
-				if(j == allImagesSrcInProduct.length) {
-					// variant image not found!
-					throw new Error("Couldn't find variant image in list of product images: " + variantImageUrl);
-				} else {
-					// remove from default variant list
-  					defaultImagesSrc.splice(defaultImagesSrc.indexOf(variantImageUrl), 1);
-					console.log("Successfully updated list of default image sources.");
-
-				}
-
-
-			} else {
-				// if there is no feautured image, variantImageUrls will have no elements. 
-				variantImageUrls = [];
-			}
-			
-
-
-			variantIdImage[0] = variantId;
-			variantIdImage[1] = variantImageUrls;
-			variantIdImage[2] = false; // will later say if the variant has only default images
-
-			variantIdImagesArray.push(variantIdImage);
-		}
-
-		
-
-		// at this point: variantIdImagesArray = [ ["variandId", ["imageSrc"]], [,]]
-
-
-
-
-
-		/* if there is one variant - this is the default NO MATTER WHAT
-		** if there is more than one variant...
-		**** add default images if necessary
-		*/
-
-		// if there is more than one variant...
-		var hasOnlyDefaultImages;
-
-		if(variantIdImagesArray.length > 1) {
-			// add default images to each if necessary
-			for(var i = 0; i < variantIdImagesArray.length; i++) {
-				variantImageUrls = variantIdImagesArray[i][1];
-				if((variantImageUrls.length == 0) && addDefaultImagesIfNoVariantImage == true) {
-					hasOnlyDefaultImages = true;
-					// make all images for default available
-					addDefaultImages(defaultImagesSrc, variantImageUrls);
-					variantIdImagesArray[i][2] = hasOnlyDefaultImages;
-
-				} else {
-					// this variant already has an image
-
-					// check to see if default should be appended anyway...
-					if(addDefaultImagesToVariants == true) {
-						addDefaultImages(defaultImagesSrc, variantImageUrls)
-					}
-				}
-
-			}
-			
-
-		}
-
-		// there is one variant - make the default
-		// add all images in product to this default
-		else {
-			
-			variantImageUrls = variantIdImagesArray[0][1];
-			hasDefaultImages = true;
-			addDefaultImages(defaultImagesSrc, variantImageUrls);
-			variantIdImagesArray[0][2] = hasDefaultImages;
-
-			
-		}
-
-
-		return variantIdImagesArray;
-
-
-
-
-		function addDefaultImages(defaultImages, destinationArray) {
-			for (var k = 0; k < defaultImages.length; k++) {
-				destinationArray.push(defaultImages[k]);
-			}
-		}
-
-
-	}
-
-
-
-
-/* WE ARE READY FOR INITIALIZATION OF THUMBNAILS AND MAIN IMAGE */
-
-
-
-
-
-
-
-
-
-	function init () {
-
-		clearMainImageContainer();
-
-		// add images in mainImageDivClass
-		setup(thumbnailDivs);
-
-
-
-		// populate array of large images
-		imagesInventory = findMain(imagesInventory);
-
-		//locate thumbnails and add listeners to bind thumbnails to large image
-		locateThumbnails(thumbnailDivs, imagesInventory);
-
-		//enable arrows
-		enableArrows(thumbnailDivs, imagesInventory);
+		// enable arrows
+		enableArrows(thumbnailContainer, largeImageContainer, settings);
 
 		  
+		/*
+		 * Refresh the thumbnails the user sees. It uses the thumbnailContainer to determine the current variant info.
+		 * Called upon initilialization or when there is a variant change.
+		 * It does assume that there is a 1:1 mapping between the variant div thumbnails and all the thumbnails.
+		 * 
+		 */
+		function refreshVisibleThumbnails(thumbnailContainer) {
+			var currentThumbnailList = thumbnailContainer.currentThumbnailList;
+
+			var currentVariantThumbnails = [];
+			var currentVariantId = thumbnailContainer.currentVariantId;
+			var allVariants = thumbnailContainer.allVariants;
+
+			// make sure all the thumbnails for this variant are visible
+			currentThumbnailList.each(function() {
+				$(this).css("display", ""); // empty string removes the display property			
+			});
+
+			// for mode2, remove the rest
+			if(thumbnailContainer instanceof ThumbnailContainer_Mode2) {
+				// find thumbnails that should be active for the current variant
+				currentVariantThumbnails = thumbnailContainer.currentVariantObject.thumbnaildivs;
+
+				// go through each existing thumbnail and compare it to the variant's thumbnails to determine if it should be hidden
+				
+				thumbnailContainer.allThumbnails.each(function() {
+					var j;
+					for(j = 0; j < currentVariantThumbnails.length; j++) {
+						if($(this).is(currentVariantThumbnails[j])) {
+							break;
+						}
+					}
+					// thumbnail not found in variant's list, so hide
+					if(j == currentVariantThumbnails.length) {
+						$(this).css("display", "none"); 			
+					}		
+
+				});
+			}
+
+		}
+
 		    
+		/*
+		 * Construct the largeImageContainer usings settings and thumbnailContainer to first add the thumbnails as large images.
+		 * Called upon initialization or variant change. The entire main image frame is redrawn.
+		 */
+		function constructLargeImageContainer(largeImageContainer, thumbnailContainer, settings) {
+			var mainImageContainerDiv = $("." + settings.mainImageContainerDivClass);
+			// clear large image div
+			mainImageContainerDiv.empty();
 
-		function setup() {
-		    // find thumbnails
-		    //var thumbnailDivs = $("." + settings.thumbnailDivContainerClass).find("div." + settings.thumbnailDivClass);
-		    var divsToPushMain = [];
-		    var hasSelected = false;
-		    var countToEnsureOneSelected = 0;
+			var currentThumbnails = thumbnailContainer.currentThumbnailList;
 
+		    // for each thumbnail, add main images to image container and populate largeImageContainer
+		    var largeImageDiv = null;
+		    currentThumbnails.each(function() {
+			    var thumbnailImageSrc;
+			    var isSelected = false;
+			    
+			    // get image element
+			    thumbnailImageSrc = $(this).children("img").attr("src");
+			    if($(this).hasClass(settings.thumbnailDivSelectedClass)) {
+			    	isSelected = true;
+			    }
 
-		    // determine if a thumbnail has a class = selected
-		    thumbnailDivs.each(function() {
-		      if($(this).hasClass(settings.thumbnailDivSelectedClass)) {
-		        hasSelected = true;
-		      }
+			    largeImageDiv = $("<div class='" + (isSelected ? settings.mainImageDivCurrentClass : settings.mainImageDivHiddenClass) + " " + settings.mainImageDivClass +"'><img src='" + thumbnailImageSrc + "'></div>");
+
+			    if(isSelected == true) {
+					largeImageContainer.selectedDiv = largeImageDiv;
+			    }
+
+			    largeImageContainer.largeImages.push(new LargeImageObject(thumbnailImageSrc, largeImageDiv));
+			    mainImageContainerDiv.append(largeImageDiv);
+
 		    });
 
-		    if(hasSelected) {
-		      thumbnailDivs.each(function() {
-		        // if the thumbnail has class = selected and is the first one to have it
-		        if(($(this).hasClass(settings.thumbnailDivSelectedClass)) && countToEnsureOneSelected == 0) {
-		          countToEnsureOneSelected++;
-		          
-		        } else {
-		          // all other thumbnails: remove multiple selected
-		          $(this).removeClass(settings.thumbnailDivSelectedClass);
-		          // set as unselected
-		          $(this).addClass(settings.thumbnailDivUnselectedClass);
-		        }
-		      });
-		    } else {
-		      // first thumbnail is "selected"
-		      $(thumbnailDivs[0]).addClass(settings.thumbnailDivSelectedClass);
+		    return largeImageContainer;
 
-		      // others are "unselected"
-		        thumbnailDivs.each(function() {
-		          // there is only one "selected", so ignore that one
-		          if(!($(this).hasClass(settings.thumbnailDivSelectedClass))) {
-		            
-		            $(this).addClass(settings.thumbnailDivUnselectedClass);
+		}
 
-		          }
-		        });
+		/*
+		 * Bind all the current thumbnails to their corresponding image.
+		 * Called upon initilialization or when there is a variant change.
+		 */
+		function bindClickListenersToThumbnails(thumbnailContainer, largeImageContainer, settings) {
+			var currentThumbnails = thumbnailContainer.currentThumbnailList;
 
+			// mode1, mode3: add all the thumbnails to the largeImageContainer
+			currentThumbnails.each(function() {
+		     
+		    	// find corresponding main image
+		     	var tempImg = null;
+		     	var corrMainImgObj = null;
+
+		      	for(var k = 0; k < largeImageContainer.largeImages.length; k++) {
+			        tempImg = largeImageContainer.largeImages[k];
+			        if(tempImg["src"] == $(this).children("img").attr("src")) {
+			          corrMainImgObj = tempImg;
+			          break;
+			        }
+			    }
+
+		    	if(!corrMainImgObj) {
+		        	throw new Error("Unable to bind to thumbnail: matching image not found");
+		    	}
+		    	 // remove previous listeners...
+		    	$(this).off("click");
+
+		    	$(this).on("click", {thumbnailContainer: thumbnailContainer, largeImageContainer: largeImageContainer, largeImage: corrMainImgObj, thumbnailClicked: this, settings: settings}, thumbnailClickedBehavior);
+
+		    });
+
+		}
+
+
+		/*
+		 * When a thumbnail is clicked, this function gets executed. It updates the productContainer and imageContainer, and sends
+		 * both for processing to update the selected thumbnail and the corresponding image.
+		 */
+		function thumbnailClickedBehavior(event) {
+			// stop autoplay
+			pauseCarousel();
+
+			var thumbnailClicked = event.data.thumbnailClicked;
+			var imageToShow = event.data.largeImage;
+			var productContainer = event.data.thumbnailContainer;
+			var imageContainer = event.data.imageContainer;
+			var settings = event.data.settings;
+
+			// update the two main objects: thumbnailContainer, largeImageContainer
+			productContainer.currentThumbnailSelected = thumbnailClicked;
+			imageContainer.selectedDiv = imageToShow["elementRef"];
+
+			refreshSelectedThumbnail(thumbnailContainer, settings)
+
+			refreshMainImage(imageContainer);
+		}
+
+		/*
+		 * If provided, configure arrows and bind listeners.
+		 *
+		 */ 
+		function enableArrows(thumbnailContainer, largeImageContainer, settings) {
+			var currentThumbnails = thumbnailContainer.currentThumbnailList;
+
+			if(currentThumbnails.length < 2) {
+				return;
+			}
+
+		    // enable arrows?
+		    var forwardArrow = $("#" + settings.idOfForwardArrow);
+		    var backwardArrow = $("#" + settings.idOfBackArrow);
+
+		    if(forwardArrow.length != 1 && backwardArrow.length != 1) {
+		    	return;
 		    }
 
-		    // for each thumnail, add main images to image container
-		    thumbnailDivs.each(function() {
-		      var thumbnailImageSrc;
-		      var isSelected = false;
-		      // get image element
-		      thumbnailImageSrc = $(this).children("img").attr("src");
-		      if($(this).hasClass(settings.thumbnailDivSelectedClass)) {
-		        isSelected = true;
-		      }
-		      divsToPushMain.push("<div class='" + (isSelected ? settings.mainImageDivCurrentClass : settings.mainImageDivHiddenClass) + " " + settings.mainImageDivClass +"'><img src='" + thumbnailImageSrc + "'></div>");
-		    });
-
-
-		    $("." + settings.mainImageContainerDivClass).append(divsToPushMain.join(""));
-
-
-
-		}
-
-
-		function clearMainImageContainer() {
-		  	$("." + settings.mainImageContainerDivClass).empty();
-		}
-
-
-		//populates arrays of large images
-		function findMain(largeImagesArray) {
-		    var mainImgMap = [];
-
-		    // extract child divs (assume they hold img)
-		    var divChildrenOfMain = $("." + settings.mainImageContainerDivClass).children("div." + settings.mainImageDivClass);
-
-		    var aMainImgElem;
-
-
-		    divChildrenOfMain.each(function() {
-		      var aMainImgObj;
-		      var imageSource;
-		      var enabledCondition;
-
-		      imageSource = $(this).children("img").attr("src");
-
-		      if($(this).hasClass(settings.mainImageDivCurrentClass)) {
-		      	enabledCondition = settings.mainImageDivCurrentClass;
-		      } 
-		      else if($(this).hasClass(settings.mainImageDivHiddenClass)){
-		      	enabledCondition = settings.mainImageDivHiddenClass;
-		      } 
-		      else {
-		      	throw new Error("Every mainImage must have an enabledCondition class");
-		      }
-
-		      aMainImgObj = new ImageObject(imageSource, enabledCondition, $(this));
-
-		      mainImgMap.push(aMainImgObj);
-
-		    });
-
-
-		    return mainImgMap;
-
-		}
-
-		function locateThumbnails(thumbnailDivs, imagesInventory) {
-		    
-
-		    thumbnailDivs.each(function() {
-		      // find corresponding main image
-		      var tempImg;
-		      var corrMainImgObj;
-
-		      for(var k = 0; k < imagesInventory.length; k++) {
-		        tempImg = imagesInventory[k];
-		        if(tempImg["src"] == $(this).children("img").attr("src")) {
-		          corrMainImgObj = tempImg;
-		        }
-		      }
-
-		      if(!corrMainImgObj) {
-		        throw new Error("Matching image not found");
-		      }
-
-		      $(this).on("click", {matchMainImgObj: corrMainImgObj, inventory: imagesInventory}, function(event) {
-		        // stop autoplay
-		        pauseCarousel();
-
-		        // unselect all thumbnails, hide all main images
-		        // select current thumbnail, show current image
-		        refreshMainImage(this, false);
-
-
-
-		      });
-
-		    });
-
-		}
-
-		// this object represents an image in the lm-gall_mainimg class div
-		function ImageObject(src, isEnabled, elementRef) {
-		    this.src = src;
-		    this.isEnabled = isEnabled;
-		    this.elementRef = elementRef;
-		}
-
-		  
-		function enableArrows(thumbnailDivs, imagesInventory) {
-		    var shouldEnableArrows = false;
-		    var forwardArrow;
-		    var backwardArrow;
-
-		    thumbnailDivs.each(function() {
-		      if($(this).children("img").length > 0) {
-		        shouldEnableArrows = true;
-		      }
-		    });
-
-		    if(!shouldEnableArrows) {
-		      return;
-		    }
-
-		    // enable arrows...
-		    forwardArrow = $("#" + settings.idOfForwardArrow);
 		    forwardArrow.css("display", "block");
-
-		    backwardArrow = $("#" + settings.idOfBackArrow);
 		    backwardArrow.css("display", "block");
 
 		    // remove previous listeners...
@@ -1246,365 +1064,332 @@ var carousel = (function carouselProductPage(globalVariable) {
 			backwardArrow.off("click");
 
 		    // listener for foward arrow
-		    forwardArrow.on("click", {orderedThumbnails: thumbnailDivs, inventory: imagesInventory, isForwardOrBack: "FORWARD"}, arrowBehavior);
-
+		    forwardArrow.on("click", {thumbnailContainer: thumbnailContainer, largeImageContainer: largeImageContainer, settings: settings, isForwardOrBack: "FORWARD"}, arrowClickBehavior);
 
 		    // listener for backward arrow
-		    backwardArrow.on("click", {orderedThumbnails: thumbnailDivs, inventory: imagesInventory, isForwardOrBack: "BACK"}, arrowBehavior);
-
+		    backwardArrow.on("click", {thumbnailContainer: thumbnailContainer, largeImageContainer: largeImageContainer, settings: settings, isForwardOrBack: "BACK"}, arrowClickBehavior);
 
 		}
 
-
-		function arrowBehavior(event) {
+		/*
+		 * When an arrow is clicked, this function gets executed.
+		 */
+		function arrowClickBehavior(event) {
 		    // stop autoplay
 		    pauseCarousel();
 
-		    //clearInterval(nextOrPrevious);
-		    nextOrPrevious(event.data.orderedThumbnails, event.data.inventory, event.data.isForwardOrBack);
+		    setNextOrPreviousThumbnailAndImage(event.data.thumbnailContainer, event.data.largeImageContainer, event.data.isForwardOrBack);
+
+		    refreshSelectedThumbnail(event.data.thumbnailContainer, event.data.settings);
+
+			refreshMainImage(event.data.largeImageContainer);
 		    
 		}
-
 		  
 	}
 
+	/*
+	 * Select the correct thumbnail. It uses the thumbnailContainer to determine the current thumbnail to select.
+	 * Called upon initilialization, when there is a variant change, when a thumbnail is clicked/selected.
+	 */
+	function refreshSelectedThumbnail(thumbnailContainer, settings) {
+		var selectedThumbnail = null;
+		var thumbnailToSelect = thumbnailContainer.currentThumbnailSelected;
+		console.log(thumbnailToSelect);
+		
+		// select/unselect all thumbnails
+		thumbnailContainer.allThumbnails.each(function() {
+			//console.log($(this));
+			if($(this).is(thumbnailToSelect)) {
+				$(this).removeClass(settings.thumbnailDivSelectedClass + " " + settings.thumbnailDivUnselectedClass).addClass(settings.thumbnailDivSelectedClass);
+			} else {
+				$(this).removeClass(settings.thumbnailDivSelectedClass + " " + settings.thumbnailDivUnselectedClass).addClass(settings.thumbnailDivUnselectedClass);
+			}
+		
+		});
 
-	// this function sets EVERYTHING to unselected or hidden
-	function prepareToChangeImage(currentThumbnail, imagesInventory) {
-
-
-		unselectThumbnails(currentThumbnail);
-		unselectMainImages(imagesInventory);
 	}
 
-	function unselectThumbnails(currentThumbnail) {
-		var otherThumbnails;
+	/*
+	 * Updates the currentThumbnailSelected property of thumbnailContainer with the new thumbnail, either the "next" or
+	 * "previous" from the thumbnailContainer's thumbnail list.
+	 *
+	 * Also updates the selectedDiv property of largeImageContainer.
+	 */
+	function setNextOrPreviousThumbnailAndImage(thumbnailContainer, largeImageContainer, isForwardOrBack) {
+		// what's the current thumbnail selected?
+	    var currentThumbnail = thumbnailContainer.currentThumbnailSelected;
+	    var thumbnailDivList = thumbnailContainer.currentThumbnailList;
+	    var currentThumbnailPosition = null;
+		var newThumbnail = null;
 
-		otherThumbnails = $(currentThumbnail).siblings("div." + settings.thumbnailDivClass);
-	    otherThumbnails.each(function() {
-	      if($(this).hasClass(settings.thumbnailDivSelectedClass)) {
-	      	$(this).removeClass(settings.thumbnailDivSelectedClass);
-	        $(this).addClass(settings.thumbnailDivUnselectedClass);
-	      }
-	    });
-		$(currentThumbnail).removeClass(settings.thumbnailDivSelectedClass)
-	    $(currentThumbnail).addClass(settings.thumbnailDivUnselectedClass);
-	}
-
-	function unselectMainImages(imagesInventory) {
-		var imageToBeHidden;
-
-		for(var j = 0; j < imagesInventory.length; j++) {
-
-	      if(imagesInventory[j]["isEnabled"] == settings.mainImageDivCurrentClass) {
-	        imageToBeHidden = imagesInventory[j]["elementRef"];
-	        imagesInventory[j]["isEnabled"] = settings.mainImageDivHiddenClass;
-	        $(imageToBeHidden).removeClass(settings.mainImageDivCurrentClass);
-	        $(imageToBeHidden).addClass(settings.mainImageDivHiddenClass);
-
-	      }
-
-	    }
-	}
-
-	function nextOrPrevious(thumbnailDivs, imagesInventory, isForwardOrBack) {
-	    // what's the current thumbnail selected?
-	    var currentThumbnail = null;
-	    var nextThumbnail = null;
-
-	    var tempMainObj;
-	    var corrMainObj;
-
-
-	    for(var k = 0; k < thumbnailDivs.length; k ++) {
-
-	    	if($(thumbnailDivs[k]).hasClass(settings.thumbnailDivSelectedClass)) {
-
-	    		currentThumbnail = thumbnailDivs[k];
+	    for(currentThumbnailPosition = 0; currentThumbnailPosition < thumbnailDivList.length; currentThumbnailPosition++) {
+	    	if($(thumbnailDivList[currentThumbnailPosition]).is(currentThumbnail)) {
+	    		break;
 	    	}
-	      	// if current has been found, look for next
-	      	if(currentThumbnail) {
+	    }
 
-	        	if(isForwardOrBack == "FORWARD") {
-	          		// if current is the last on the list...
-	          		if(k == thumbnailDivs.length - 1) {
-	            		// next is the first one..
-	            		nextThumbnail = thumbnailDivs[0];
-	          		} else {
-	            		nextThumbnail = thumbnailDivs[k + 1];
-	          		}
+	    if(currentThumbnailPosition == thumbnailDivList.length) {
+	    	throw new Error("Current thumbnail not found in list of thumbnails!");
+	    }
 
-	          		break;
+	    if(isForwardOrBack == "FORWARD") {
+	        // if current is the last on the list...
+	        if(currentThumbnailPosition == thumbnailDivList.length - 1) {
+	            // next is the first one..
+	            newThumbnail = thumbnailDivList[0];
+	        } else {
+	            newThumbnail = thumbnailDivList[currentThumbnailPosition + 1];
+	        }
 
-	          	} else if(isForwardOrBack="BACK") {
-		            // if current is the last on the list...
-		            if(k == 0) {
-		            	// next is the first one..
-		              	nextThumbnail = thumbnailDivs[thumbnailDivs.length - 1];
-	            	} else {
-	              		nextThumbnail = thumbnailDivs[k - 1];
-	            	}
+	    } else if(isForwardOrBack="BACK") {
+		    // if current is the first on the list...
+		    if(currentThumbnailPosition == 0) {
+			    // back is the last one..
+			    newThumbnail = thumbnailDivList[thumbnailDivList.length - 1];
+	        } else {
+	            newThumbnail = thumbnailDivList[currentThumbnailPosition - 1];
+	        }
 	            
-	            break;
 	        	
-	        	} else {
-	          		throw new Error("ARROW MUST BE FORWARD OR BACK");
-	        	} 
+	    } else {
+	        throw new Error("Expected FORWARD or BACK");
+	    } 
 
-	      	}
+		thumbnailContainer.currentThumbnailSelected = newThumbnail;
 
-	    }
+		// set the corresponding selectedDiv in largeImageContainer
+	    var corrImageDiv = searchImageContainerForThumbnailMatch(largeImageContainer, newThumbnail);
 
-	    if (!currentThumbnail) {
-	      throw new Error("Current Thumbnail Not Found!");
-
-	    }
-
-	    if (!nextThumbnail) {
-	      throw new Error("Next Thumbnail Not Found!");
-
-	    }
-
-	    refreshMainImage(nextThumbnail,false);
-
-
-	}
-
-	function refreshMainImage(currentThumbnail, hasThumbnailBeenSelected) {
-		// what's the corresponding image for the NEXT?
-	    var tempMainObj = null;
-	    var corrMainObj = null;
-
-
-	    for(var i = 0; i < imagesInventory.length; i++) {
-	      tempMainObj = imagesInventory[i];
-	      
-	      if(tempMainObj["src"] == $(currentThumbnail).children("img").attr("src")) {
-	        corrMainObj = imagesInventory[i];
-	      }
-
-	    }
-
-	    if(!corrMainObj) {
+	    if(!corrImageDiv) {
 	      throw new Error("CORRESPONDING Main IMAGE for this thumbnail not found");
 	    }
 
-	    // now we have a referenbce to the mainObj we want to show
+	    largeImageContainer.selectedDiv = corrImageDiv;
 
-	    if(hasThumbnailBeenSelected == false) {
-	    	// set "unselected" on all thumbnails, "hidden" on all main images, "hidden" for each element in imagesInventory array
-	    	prepareToChangeImage(currentThumbnail, imagesInventory);
+	}
 
-	    	// "select" new thumbnail
-	    	$(currentThumbnail).removeClass(settings.thumbnailDivUnselectedClass);   
-	    	$(currentThumbnail).addClass(settings.thumbnailDivSelectedClass);
+	function searchImageContainerForThumbnailMatch(largeImageContainer, thumbnail) {
+		var tempMainObj = null;
+	    var corrImageDiv = null;
 
-	    } else if(hasThumbnailBeenSelected == true){
-	    	// just hide mainImages
-	    	unselectMainImages(imagesInventory);
+	    for(var i = 0; i < largeImageContainer.largeImages.length; i++) {
+	      tempMainObj = largeImageContainer.largeImages[i];
+	      
+	      if(tempMainObj["src"] == $(thumbnail).children("img").attr("src")) {
+	        corrImageDiv = tempMainObj["elementRef"];
+	        break;
+	      }
 
-	    } else {
-	    	throw "invalid args";
 	    }
 
-
-
-	    // "current" corresponding main image
-	    $(corrMainObj["elementRef"]).removeClass(settings.mainImageDivHiddenClass);	    
-	    $(corrMainObj["elementRef"]).addClass(settings.mainImageDivCurrentClass);
-
-	    // "current" in corresponding element in imagesInventory array
-	    corrMainObj["isEnabled"] = settings.mainImageDivCurrentClass;
+	    return corrImageDiv;
 	}
 
-	function autoplay(thumbnailDivs, imagesInventory) {
-		// only autoplay if there is more than one image
-		if(thumbnailDivs.length > 1) {
-			nextOrPrevious(thumbnailDivs, imagesInventory, "FORWARD");
+
+	/*
+	 * Takes the imageContainer and uses it to update the large image frame.
+	 * Used after the div container is constructed (e.g. thumbnail selected, autoplay, arrow, ...)
+	 */
+	function refreshMainImage(imageContainer) {
+		var newMainImage = imageContainer.selectedDiv;
+		var imageObject = null;
+		var transientMainImage = null;
+		for(var i = 0; i < imageContainer.largeImages.length; i++) {
+			transientMainImage = imageContainer.largeImages[i].elementRef;
+			if(transientMainImage.is(newMainImage)) {
+				transientMainImage.removeClass(settings.mainImageDivHiddenClass).addClass(settings.mainImageDivCurrentClass);
+			} else {
+				transientMainImage.removeClass(settings.mainImageDivCurrentClass).addClass(settings.mainImageDivHiddenClass);
+			}
 		}
-		else { }
-	    
 
 	}
 
-	function pauseCarousel() {
+	function autoplay(thumbnailContainer, largeImageContainer, settings) {
+		// shouldn't happen, but check again: only change if there is more than one image
+		if(thumbnailContainer.currentThumbnailList.length > 1) {
+			setNextOrPreviousThumbnailAndImage(thumbnailContainer, largeImageContainer, "FORWARD");
+			refreshSelectedThumbnail(thumbnailContainer, settings);
+			refreshMainImage(largeImageContainer);
+		}
 
+	}
+	
+	/*
+	 * Stops the carousel.
+	 */
+	function pauseCarousel() {
 		globalVariable.clearInterval(autoplayVar);
 
 	}
 
+	/*
+	* Accesses the "global" THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, and settings to continue the carousel, if applicable
+	*/
 	function continueCarousel() {
-		autoplayVar = setInterval(function() {
-	    							autoplay(thumbnailDivs, imagesInventory);
-	    						  }, settings.secondsCarousel);
-
-	}
-
-
-	function decideIfEnableCarousel(doEnable, defaultEnable, pauseCarouselIfVariantImage, showingDefaultImagesOnly, showingVariantImage, mode) {
-		// doEnable forces enabling...
-		if(doEnable == true) {
-			enable();
-
-			return;
-		}
-		if(doEnable == false) {
-
-			return; // don't enable
-		}
-		else if (doEnable == null) {
-			if(mode == "mode1") {
-				if(pauseCarouselIfVariantImage && showingVariantImage) {
-					// don't enable
-				} else {
-					enable();
-				}
-
-			} else if(mode == "mode2") {
-				if(pauseCarouselIfVariantImage && (showingVariantImage && !showingDefaultImagesOnly)) {
-					// don't enable
-				} else {
-					enable();
-				}
-
-			} else if(mode == "mode3")
-
-			if(defaultEnable == true) {
-				enable();
-			}
-		}
-
-		function enable() {
-			//begin autoplay
+		if(shouldEnableCarousel(settings.autoplay, settings.mode1_mode2_pauseCarouselIfVariantImage, THUMBNAIL_CONTAINER)) {
 			autoplayVar = setInterval(function() {
-	    			autoplay(thumbnailDivs, imagesInventory);
-	    			}, settings.secondsCarousel);
-
+	    							autoplay(THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, settings);
+	    						  }, settings.secondsCarousel);
 		}
+
+	}
+
+	/*
+	 * Will enable the carousel functionality based on a variety of factors.
+	 * The carousel will only activate if the defaultEnable property is set to true.
+	 * If the current thumbnails are fewer than 2, the carousel won't active; also if 
+	 * we're in modes 1/2 and we're showing the featured variant image (and pauseCarouselIfVariantImage is true).
+	 * In any other scenario, it will activate
+	 */
+	function shouldEnableCarousel(defaultEnable, pauseCarouselIfVariantImage, thumbnailContainer) {
+		if(defaultEnable != true) {
+			return false;
+		}
+
+		if(thumbnailContainer.currentThumbnailList.length < 2){
+			return false;
+		}
+
+		if(thumbnailContainer instanceof ThumbnailContainer_Mode3) {
+			console.log("yes mode 3");
+			return true;
+		}
+
+		var showingVariantImage = thumbnailContainer.currentVariantObject.initializedWithVariantThumbnail;
+		console.log(thumbnailContainer.currentVariantObject.variantId);
+		console.log(showingVariantImage);
+		if(pauseCarouselIfVariantImage == true && showingVariantImage == true) {
+			return false;
+		}
+
+		return true;
 		
 	}
 
-	function changeVariant(variantId) {
+	// begin autoplay
+	function enable(thumbnailContainer, largeImageContainer, settings) {
+		return setInterval(function() {
+	    			autoplay(thumbnailContainer, largeImageContainer, settings);
+	    		}, settings.secondsCarousel);
+
+	}
+
+
+	/*
+	 * Refreshes the THUMBNAIL_CONTAINER with the variantObject that has the provided id (if it exists).
+	 * For mode 1, it simply selects the appropiate large image from LARGE_IMAGE_CONTAINER and refeshes the DOM.
+	 * For mode 2, it gets a fresh copy of LARGE_IMAGE_CONTAINER and calls init() to re-initialize.
+	 * For mode 3, it does nothing.
+	 *
+	 * The carousel is restarted if it meets the criteria.
+	 */
+	function changeVariant(newVariantId) {
 		// disabled...
-
-		if(mode3Enabled) {
-			throw new Error("Variant functionality disabled - mode 3");
+		if(THUMBNAIL_CONTAINER instanceof ThumbnailContainer_Mode3) {
+			console.log("Variant functionality disabled - mode 3");
 			return;
 		}
 
 		// stop the carousel
 		pauseCarousel();
 
-		if(mode1Enabled) {
-			if(showingDefaultImagesOnly == true) {
-				// there are no variant images
-			} else {
-				// some variants have images
-				var selectThumbnailResult = selectCurrentVariant(variantId, variantIdImagesArray, thumbnailDivs);
+		// update the "global" objects
 
-				if(selectThumbnailResult[0] == true) {
-					// found and selected the variant!
-					selectedVariantImage = true;
-					currentVariant = variantId;
-					showingDefaultImagesOnly = false;
-
-					// update imageContainer 
-					
-
-				} else {
-					// not found... possibly restart the carousel....
-					selectedVariantImage = false;
-					currentVariant = "default";
-				}
-
-				refreshMainImage(selectThumbnailResult[1], true);
-
+		// first, find the variant object that has the same id as argument
+		var transientVariant;
+		var matchingVariantObject;
+		for(var i = 0; i < THUMBNAIL_CONTAINER.allVariants.length; i++) {
+			transientVariant = THUMBNAIL_CONTAINER.allVariants[i];
+			if(transientVariant["variantId"] == newVariantId) {
+				matchingVariantObject = transientVariant;
+				break;
 			}
-			
+		}
 
-			decideIfEnableCarousel(null, settings.autoplay, settings.mode1_mode2_pauseCarouselIfVariantChosen, showingDefaultImagesOnly, selectedVariantImage, mode);
+		if(matchingVariantObject == null) {
+			throw new Error("No variant object found for " + newVariantId);
+		}
 
+		// update variant container with the new variant object 
+		THUMBNAIL_CONTAINER.currentVariantObject = matchingVariantObject;
+		THUMBNAIL_CONTAINER.currentThumbnailSelected = matchingVariantObject.defaultThumbnailDiv;
 
-
-		} else if(mode2Enabled) {
-			// set current thumbnaildivs
-			try {
-				thumbnailDivs = getCurrentThumbnailDivs(variantId, productAllThumbnailDivs);
-			} catch(error) {
-				throw new Error("Variant NOT found: " + variantId);
-
-				return;
-			}
-
-			// this variantId was successfully found
-			currentVariant = variantId;
-
-
-			// hide all other thumbnails
-			hideOtherThumbnails(thumbnailDivs, allThumbnails);
-
-			// make sure current thumbnails are visible
-			showCurrentThumbnails(thumbnailDivs, settings.mode2_selectCurrentVariantThumbnail);
-
-			// restart
-			init();
-
-			showingDefaultImagesOnly = willBeShowingDefaultImagesOnly(currentVariant, variantIdImagesArray);
-
-			// make sure slideshow is stopped only if variant has no default images
-			decideIfEnableCarousel(null, settings.autoplay, settings.mode1_mode2_pauseCarouselIfVariantChosen, showingDefaultImagesOnly, selectedVariantImage, mode);
+		if(THUMBNAIL_CONTAINER instanceof ThumbnailContainer_Mode1) {
+			// current thumbnail list doesn't change
+		} else {
+			THUMBNAIL_CONTAINER.currentThumbnailList = matchingVariantObject.thumbnaildivs;
 
 		}
 
-		
+		/*
+		 * In mode 1, we don't need to redraw and rebind everything...
+		 *
+		 * - update the large image container after finding the corresponding large image
+		 * - "select" the new current thumbnail in the container
+		 */
+		var largeImageDiv = null;
+		if(THUMBNAIL_CONTAINER instanceof ThumbnailContainer_Mode1) {			
+			largeImageDiv = searchImageContainerForThumbnailMatch(LARGE_IMAGE_CONTAINER, THUMBNAIL_CONTAINER.currentThumbnailSelected);
+			
+			if(!largeImageDiv) {
+	      		throw new Error("CORRESPONDING Main IMAGE for this thumbnail not found");
+	    	}
 
+	    	LARGE_IMAGE_CONTAINER.selectedDiv = largeImageDiv;
+
+	    	refreshSelectedThumbnail(THUMBNAIL_CONTAINER, settings);
+
+			refreshMainImage(LARGE_IMAGE_CONTAINER);
+		} else {
+			// full restart needed
+			LARGE_IMAGE_CONTAINER = new LargeImageContainer();
+			init(THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, settings);
+		}
+
+
+		if(shouldEnableCarousel(settings.autoplay, settings.mode1_mode2_pauseCarouselIfVariantImage, THUMBNAIL_CONTAINER)) {
+			autoplayVar = enable(THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, settings);
+		}
 
 	}
 
-	function showDefault() {
-		// disabled if in mode3
+	/*
+ 	 * Provides a fresh set of "global" objects PRODUCT_INFO, THUMBNAIL_CONTAINER, and LARGE_IMAGE_CONTAINER.
+ 	 * The initialization process is run all over again.
+	 */
+	function restart() {
 
-		if(mode3Enabled) {
-			throw new Error("Variant functionality disabled - mode 3");
-			return;
-		}
 		// stop the carousel
 		pauseCarousel();
 
-		if(mode1Enabled) {
-			var selectedThumnail = null;
-			// the product has no variant images
-			if(showingDefaultImagesOnly) {
-			} else {
-				// select first image...
-				selectedThumbnail = selectFirstImage(thumbnailDivs);
-				currentVariant = "default"; // only time this variable doesn't hold an id
-				selectedVariantImage = false;
 
-				// refresh imageContainer
-				refreshMainImage(selectedThumbnail, true);
-			}
+		PRODUCT_INFO = new ProductInfo();
+
+		// get all thumbnail divs
+		PRODUCT_INFO.allThumbnailDivs = getAllThumbnails();
 
 
+		// create the image src mappings: defaultImagesSrc and imageSrcMappings properties 
+		processImages(PRODUCT_INFO, globalVariable);
 
-		} else if(mode2Enabled) {
-			// set current thumbnaildivs
-			currentVariant = "default"; // only time this variable doesn't hold an id
-			thumbnailDivs = defaultThumbnailDivs;
-			
-			// hide all other thumbnails
-			hideOtherThumbnails(thumbnailDivs, allThumbnails);
+		// determine current mode: "mode1", or "mode2" or "mode3"
+		populateModeAndCurrentVariantId(PRODUCT_INFO, settings, globalVariable);
 
-			showCurrentThumbnails(thumbnailDivs, false);
 
-			// restart
-			init();
+		// a fully populated VariantContainer_Mode{}
+		THUMBNAIL_CONTAINER = createParentObject(settings, globalVariable, PRODUCT_INFO);
 
-			showingDefaultImagesOnly = true;
+		LARGE_IMAGE_CONTAINER = new LargeImageContainer();
 
+		init(THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, settings);
+
+		// will hold interval of autoplay
+		var autoplayVar;
+		if(shouldEnableCarousel(settings.autoplay, settings.mode1_mode2_pauseCarouselIfVariantImage, THUMBNAIL_CONTAINER)) {
+			autoplayVar = enable(THUMBNAIL_CONTAINER, LARGE_IMAGE_CONTAINER, settings);
 		}
-
-		decideIfEnableCarousel(null, settings.autoplay, settings.mode1_mode2_pauseCarouselIfVariantImage, showingDefaultImagesOnly, selectedVariantImage, mode);
 
 	}
 
@@ -1612,23 +1397,8 @@ var carousel = (function carouselProductPage(globalVariable) {
 		pause: pauseCarousel,
 		continue: continueCarousel,
 		changeVariant: changeVariant,
-		showDefault: showDefault
+		restart: restart
 	};
 
-	
 
 })(window);
-
-
-
-
-
-
-
-
-
-
-
-
-
-

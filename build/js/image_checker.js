@@ -1,5 +1,9 @@
 var imageChecker = (function carouselImageChecker(globalVariable) {
 	
+	/*
+	 * Are the two src strings equivalent? If they aren't, null is returned.
+	 *
+	 */
 	function synchronizeImagePaths(thumbnailImgSrc, objectImgSrc) {
 
 		//cdn.shopify.com/s/files/1/2464/4489/products/DSC_0003_-_front_7e841e23-870e-47f4-9b16-9e010810e8fa.jpg?v=1523393803
@@ -15,12 +19,6 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 		**          else     -> null
 		*/
 
-		
-
-
-	
-
-		console.log("synchronizeImagePaths: comparing ....." + thumbnailImgSrc + "  ------  " + objectImgSrc);
 
 		/* Pre-Strategy: http: || https: prefix and startsWith...
 		**
@@ -48,23 +46,14 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 		}
 
 
-
-
-
-
 		/* STRATEGY 1: url size
 		** if strings are the same size, they must be exactly the same -> return true
 		*/
-
-
-
 		if(thumbnailImgSrc.length == objectImgSrc.length) {
 			if(stringSameLengthComparator(thumbnailImgSrc, objectImgSrc)) {
 				// same size
-				console.log("MATCH - same size");
 				return thumbnailImgSrc;
 			} else {
-				console.log("No MATCH - not same size");
 				return null;
 			}
 
@@ -81,11 +70,6 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 			urlLong = thumbnailImgSrc;
 		}
 
-		console.log("long: " + urlLong);
-		console.log("short: " + urlShort);
-
-
-
 
 		/*
 		** STRATEGY 2: .jpg
@@ -96,13 +80,9 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 			4. else, if same size, must be equal
 			5. else continue
 		*/
-
 		var urlNoJpgArray;
 		var urlNoJpgLong = null;
 		var urlNoJpgShort = null;
-
-
-
 
 
 		if(urlShort.includes(".jpg") || urlLong.includes(".jpg")) {
@@ -119,27 +99,18 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 			}
 		}
 
-		console.log("long: " + urlLong);
-		console.log("short: " + urlShort);
 
 
 		// if same size... must be equal
 		if(urlLong.length == urlShort.length) {
 			if(stringSameLengthComparator(urlLong, urlShort)) {
 				// same size
-				console.log("MATCH - same size after .jpg strategy");
 				return thumbnailImgSrc;
 			} else {
-				console.log(" NO MATCH - same size after .jpg strategy, but not equal");
 				return null;
 			}
 
 		}
-
-
-
-		console.log(".jpg strategy INCONCLUSIVE")
-
 
 
 		/*
@@ -150,26 +121,63 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 				- if either contains the other, return the one with dimensions
 				- else return false
 		*/
+		var newUrlShort = extractSrcDimensionsComparator(urlShort);
+		var newUrlLong = extractSrcDimensionsComparator(urlLong);
 
+		console.log(newUrlShort);
+		console.log(newUrlLong);
 
-		var urlToBeReturned = extractSrcDimensionsComparator(urlShort, urlLong);
-
-		console.log(urlToBeReturned);
-
-		if(urlToBeReturned) {
-			console.log("Match - dimensions strategy");
-			return urlToBeReturned;
+		if(newUrlShort == newUrlLong) {
+			return newUrlLong;
 		}
 
-		urlToBeReturned = extractSrcDimensionsComparator(urlLong, urlShort);
 
-		if(urlToBeReturned) {
-			console.log("Match - dimensions strategy");
-			return urlToBeReturned;
+
+
+		/*
+		 * STRATEGY 4: "."
+		 * Our last strategy will fall back on breaking up the strings by "."
+		 * Only one of the string pieces will have "/", and this is the one we're interested in.
+		 *
+		 * Ex:
+		 * //cdn.shopify.com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP_1000x1000.progressive.jpg?v=1576817622
+		 * We want to extract "com/s/files/1/1213/2366/products/31-V743GRW-E-RI_FLATUP_1000x1000" for comparison.
+		 *
+		 */
+		 var urlShortDotPieces = newUrlShort.split(".");
+		 var urlLongDotPieces = newUrlLong.split(".");
+
+		 var fragmentShortToComp = null;
+		 var fragmentLongToComp = null;
+
+		 for(var i = 0; i < urlShortDotPieces.length; i++) {
+		 	if(urlShortDotPieces[i].indexOf("/") > -1) {
+		 		fragmentShortToComp = urlShortDotPieces[i];
+		 		break;
+		 	}
 		}
+
+		if(!fragmentShortToComp) {
+		 	return null;
+		}
+
+		for(var i = 0; i < urlLongDotPieces.length; i++) {
+		 	if(urlLongDotPieces[i].indexOf("/") > -1) {
+		 		fragmentLongToComp = urlLongDotPieces[i];
+		 		break;
+		 	}
+		}
+
+		if(!fragmentLongToComp) {
+		 	return null;
+		}
+
+		if(fragmentShortToComp == fragmentLongToComp) {
+			return newUrlLong;
+		}
+
 
 		// no match found!!
-		console.log("NO MATCH - strategies exhausted");
 		return null;
 
 
@@ -177,7 +185,6 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 			// arguments must be of same size!
 			if(arg1.length == arg2.length) {
 				if(arg1 == arg2) {
-					//console.log("Equal length - match");
 					return arg1;
 				} else {
 					return null;
@@ -199,15 +206,12 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 				finalString = url;
 			}
 			
-
 			return finalString;
-
-
 
 		}
 
 
-		function extractSrcDimensionsComparator(firstUrl, secondUrl) {
+		function extractSrcDimensionsComparator(firstUrl) {
 			/*
 			** determine if what is after the last undercore of firstUrl is image dimensions
 			** make sure they are of different sizes... the firstUrl will be the longer one
@@ -226,41 +230,24 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 
 			*/
 
-			// equally sized strings cannot contain dimensions and be equal
-			if(firstUrl.length == secondUrl.length) {
-				console.log("Equal size!");
-				return null;
-			}
-
-			var tempUrl;
-			if(secondUrl.length > firstUrl.length) {
-				tempUrl = firstUrl;
-				firstUrl = secondUrl;
-				secondUrl = tempUrl;
-
-				console.log("New urls: " + firstUrl);
-				console.log("secondUrl: " + secondUrl);
-
-			}
-
-
 			var splitAt_Array = firstUrl.split("_");
 
 			if(splitAt_Array.length < 2) {
 				// no "_" found!
-				console.log("No _");
-				return null;
+				return firstUrl;
 			}
 
-
-
 			var lastMatchWithUnderscore = splitAt_Array[splitAt_Array.length - 1];
-			console.log(lastMatchWithUnderscore);
 			var splitAtXArray = lastMatchWithUnderscore.split("x");
 			if(splitAtXArray.length < 2) {
 				// no "x" found!
-				console.log("No x");
-				return null;
+				// try uppercase
+				splitAtXArray = lastMatchWithUnderscore.split("X");
+				if(splitAtXArray.length < 2) {
+					// no "X" found
+					return firstUrl;
+				}
+
 			}
 
 			// look at the last 'x'
@@ -275,24 +262,16 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 			var fg_to_array = fg.split("");
 			var sg_to_array = sg.split("");
 
-			console.log(fg_to_array);
-			console.log(sg_to_array);
-			console.log(lastChar_fg);
-			console.log(firstChar_sg);
-
 
 			if($.isNumeric(lastChar_fg) && $.isNumeric(firstChar_sg)) {
 
 
 				// determine how many numbers are at the end of fg
 				for(var i = fg_to_array.length - 1; i >= 0; i--) {
-					console.log(fg_to_array[i]);
 					if($.isNumeric(fg_to_array[i])) {
-						console.log("true");
 						numberSize_fg++;
 					} else {
 						// first non numeric character... break
-						console.log("false");
 						break;
 					}
 				}
@@ -300,38 +279,25 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 				// determine how many numbers are at the start of sg
 				for(var i = 0; i < sg_to_array.length; i++) {
 					if($.isNumeric(sg_to_array[i])) {
-						console.log(sg_to_array[i]);
-						console.log("true");
+
 						numberSize_sg++;
 					} else {
 						// first non numeric character... break
-						console.log("false");
 						break;
 					}
 				}
 
 			} else {
 				// no dimension found at end..
-				return null;
+				return firstUrl;
 			}
-
-			console.log(numberSize_fg);
-			console.log(numberSize_sg);
-
 
 			// add elements from first
 			var finalUrl = [];
 			var fg_noDimensions = fg.substr(-1 * numberSize_fg, fg.length - numberSize_fg); // wer1000
 			var sg_noDimensions = sg.substr(numberSize_sg); //1000wer
 
-			console.log(fg);
-			console.log(sg);
 
-			console.log(fg_noDimensions);
-			console.log(sg_noDimensions);
-
-			
-			console.log(splitAt_Array);
 			// put together pieces that were split by _ excluding the last group
 			for(var i = 0; i < splitAt_Array.length - 1; i++) {
 				if(i != 0) {
@@ -340,9 +306,7 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 				finalUrl.push(splitAt_Array[i]);
 			}
 
-
 			// add pieces that were split by 'x', excluding the last group (which includes the dimensions)
-			console.log(splitAtXArray);
 			for(var i = 0; i < splitAtXArray.length - 2; i++) {
 				if(i != 0) {
 					finalUrl.push("x");
@@ -350,35 +314,22 @@ var imageChecker = (function carouselImageChecker(globalVariable) {
 				finalUrl.push(splitAtXArray[i]); // ["wer", "x", ""wefs"]
 
 			}
-			console.log(finalUrl);
 
 			// add pieces surrounding dimensions in the last group (eg. excf from ex100x100cf)
 			// push fg and lg, without dimension characters
 			finalUrl.push(fg_noDimensions);
 			finalUrl.push(sg_noDimensions);
 
-			console.log(finalUrl);
-
-
 			finalUrl = finalUrl.join('');
 
-			console.log(finalUrl);
-			
 			// STEP 10
+			return finalUrl;
 
-
-			if(secondUrl == finalUrl) {
-				// return url with size
-				return firstUrl; 
-
-			} else {
-				return null;
-			}
 
 		}
 
-
 	}
+
 
 
 	return {
