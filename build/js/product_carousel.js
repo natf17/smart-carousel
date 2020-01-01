@@ -157,7 +157,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		var currentVariantId = productInfo.currentVariantId; // will be null for mode 3
 		
 		var variantContainer = null;
-		console.log(productInfo);
 
 		// mode3: select the first image
 		if(productInfo.mode == "mode3") {
@@ -173,7 +172,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		var imageSrcEntry = null;
 		for(var i = 0; i < productInfo.imageSrcMappings.length; i++) {
 			imageSrcEntry = productInfo.imageSrcMappings[i];
-					console.log("d " + productInfo.mode);
 
 			if(productInfo.mode == "mode1") {
 				variantObject = new Variant_Mode1();
@@ -181,7 +179,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 				// this variant has no featured image so select the first available image
 				if(imageSrcEntry.productVariantSrc == null || imageSrcEntry.productImageSrc == null) {
 					variantObject.defaultThumbnailDiv = allProductThumbnails[0];
-					console.log(variantObject.variantId);
 					variantObject.initializedWithVariantThumbnail = false;
 				} else {
 					variantObject.initializedWithVariantThumbnail = true;
@@ -240,7 +237,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 		var currentVariantObject = null;
 		for(var i = 0; i < variantObjects.length; i++) {
-			console.log("comparing " + variantObjects[i]["variantId"] + " with " + currentVariantId);
 			if(variantObjects[i]["variantId"] == currentVariantId) {
 				currentVariantObject = variantObjects[i];
 				variantContainer.currentVariantObject = currentVariantObject;
@@ -277,7 +273,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		thumbnailDivs.each(function() {
 			// get image element
 		    thumbnailImageSrc = $(this).children("img").attr("src");
-		    console.log("src: " + thumbnailImageSrc);
 		    if(synchronizeImagePaths(variantImgSrc, thumbnailImageSrc)) {
 				matchingThumbnail = $(this);
 				return false;
@@ -396,11 +391,9 @@ var carousel = (function carouselProductPage(globalVariable) {
 				if(variantImageUrl) {
 					variantImageUrl = variantImageUrl["src"];
 				}
-				console.log(variantImageUrl);
 			}
 
 			if(!variantImageUrl) {
-				console.log("none for " + prodVariant["id"]);
 				imageSrcEntry = new ImageSrcEntry(prodVariant["id"], null, null);
 				productInfo.imageSrcMappings.push(imageSrcEntry);
 				continue;
@@ -415,7 +408,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 				variantImageUrlInProduct = allImagesSrcInProduct[j];
 				if (synchronizeImagePaths(variantImageUrl, variantImageUrlInProduct)) {
 					imageSrcEntry = new ImageSrcEntry(prodVariant["id"], variantImageUrl, variantImageUrlInProduct);
-					console.log(prodVariant["id"]);
 					productInfo.imageSrcMappings.push(imageSrcEntry);
 					
 					break;
@@ -456,7 +448,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 	function populateModeAndCurrentVariantId(productInfo, settings, globVar) {
 		var currentMode = null;
 		var currentVariantId = null;
-		console.log("POPUATIG MODE");
 		var defaultMode1 = false;
 		if(settings.mode1 == false && settings.mode2 == false && settings.mode3 == false) {
 			defaultMode1 = true;
@@ -464,12 +455,10 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 		if(settings.mode1 == true || settings.mode2 == true || defaultMode1 == true) {
 			currentVariantId = findCurrentVariantId(settings, globVar);
-			console.log(currentVariantId);
 			if(currentVariantId) {
 				currentMode = (settings.mode1 == true || defaultMode1 == true)? "mode1" : "mode2";
 			} else {
 				// no variant found... fall back to mode 3
-						console.log("no variant found");
 				currentMode = "mode3";
 			}
 		} else if(settings.mode3Enabled == true){
@@ -486,13 +475,11 @@ var carousel = (function carouselProductPage(globalVariable) {
 		 */
 
 		if(productInfo.imageSrcMappings.length < 2) {
-					console.log("less than 2 images");
 
 		 	currentMode = "mode3";
 		}
 
 		if(productInfo.doesAVariantHaveFeaturedImage == false) {
-					console.log("no featured image");
 
 		 	currentMode = "mode3";
 		}
@@ -503,8 +490,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 
 		productInfo.mode = currentMode;
 		productInfo.currentVariantId = currentVariantId;
-		console.log(currentMode);
-		console.log(productInfo.mode);
 		return productInfo;
 
 	}
@@ -668,9 +653,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 		*/
 		var newUrlShort = extractSrcDimensionsComparator(urlShort);
 		var newUrlLong = extractSrcDimensionsComparator(urlLong);
-
-		console.log(newUrlShort);
-		console.log(newUrlLong);
 
 		if(newUrlShort == newUrlLong) {
 			return newUrlLong;
@@ -1025,7 +1007,7 @@ var carousel = (function carouselProductPage(globalVariable) {
 			var thumbnailClicked = event.data.thumbnailClicked;
 			var imageToShow = event.data.largeImage;
 			var productContainer = event.data.thumbnailContainer;
-			var imageContainer = event.data.imageContainer;
+			var imageContainer = event.data.largeImageContainer;
 			var settings = event.data.settings;
 
 			// update the two main objects: thumbnailContainer, largeImageContainer
@@ -1095,7 +1077,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 	function refreshSelectedThumbnail(thumbnailContainer, settings) {
 		var selectedThumbnail = null;
 		var thumbnailToSelect = thumbnailContainer.currentThumbnailSelected;
-		console.log(thumbnailToSelect);
 		
 		// select/unselect all thumbnails
 		thumbnailContainer.allThumbnails.each(function() {
@@ -1253,13 +1234,10 @@ var carousel = (function carouselProductPage(globalVariable) {
 		}
 
 		if(thumbnailContainer instanceof ThumbnailContainer_Mode3) {
-			console.log("yes mode 3");
 			return true;
 		}
 
 		var showingVariantImage = thumbnailContainer.currentVariantObject.initializedWithVariantThumbnail;
-		console.log(thumbnailContainer.currentVariantObject.variantId);
-		console.log(showingVariantImage);
 		if(pauseCarouselIfVariantImage == true && showingVariantImage == true) {
 			return false;
 		}
@@ -1288,7 +1266,6 @@ var carousel = (function carouselProductPage(globalVariable) {
 	function changeVariant(newVariantId) {
 		// disabled...
 		if(THUMBNAIL_CONTAINER instanceof ThumbnailContainer_Mode3) {
-			console.log("Variant functionality disabled - mode 3");
 			return;
 		}
 
